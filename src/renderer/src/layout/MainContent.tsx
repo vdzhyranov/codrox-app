@@ -3,7 +3,7 @@ import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 // tabStore unused after tmux migration — keep import if lifecycle phases need it
 // import { useTabStore } from '@renderer/store/tabStore'
 import { DirectoryPicker } from '@renderer/components/DirectoryPicker'
-import { TmuxTerminal } from '@renderer/components/TmuxTerminal'
+import { WorkspaceView } from '@renderer/components/WorkspaceView'
 import { TmuxInstallCheck } from '@renderer/components/TmuxInstallCheck'
 import {
   ModePicker,
@@ -159,8 +159,6 @@ export function MainContent(): JSX.Element {
   const activeWorktreePath = useActiveWorktreePath()
   const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
   const lifecycleByWorktree = useWorkspaceStore((s) => s.lifecycleByWorktree)
-  const setWorktreeMode = useWorkspaceStore((s) => s.setWorktreeMode)
-  // openTab removed — tmux handles terminal creation now
 
   // No workspace selected — welcome screen
   if (!activeWorktreePath) {
@@ -186,9 +184,6 @@ export function MainContent(): JSX.Element {
   const lifecycle = lifecycleByWorktree[activeWorktreePath]
   const currentPhase = lifecycle?.phase ?? null
 
-  // Compute tmux session name for this worktree
-  const sessionName = `codrox-${activeWorktreePath.split('/').pop() || 'default'}`
-
   // Lifecycle mode — show phase track + phase content
   if (mode === 'lifecycle' && currentPhase) {
     return (
@@ -202,11 +197,11 @@ export function MainContent(): JSX.Element {
     )
   }
 
-  // Terminal or Claude mode — show tmux terminal
+  // Terminal or Claude mode — show workspace view
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
       <TmuxInstallCheck>
-        <TmuxTerminal worktreePath={activeWorktreePath} sessionName={sessionName} />
+        <WorkspaceView worktreePath={activeWorktreePath} />
       </TmuxInstallCheck>
     </div>
   )
