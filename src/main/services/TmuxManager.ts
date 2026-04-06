@@ -1,8 +1,20 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { basename } from 'path'
+import { basename, join } from 'path'
+import { existsSync } from 'fs'
 
 const execFileAsync = promisify(execFile)
+
+// Find the codrox tmux config file
+function getConfigPath(): string | null {
+  // In dev: resources/codrox.tmux.conf relative to project root
+  const devPath = join(__dirname, '..', '..', '..', 'resources', 'codrox.tmux.conf')
+  if (existsSync(devPath)) return devPath
+  // In production: resources directory next to the app
+  const prodPath = join(__dirname, '..', '..', 'resources', 'codrox.tmux.conf')
+  if (existsSync(prodPath)) return prodPath
+  return null
+}
 
 export interface TmuxSessionInfo {
   name: string
@@ -34,8 +46,16 @@ class TmuxManager {
 
   async createSession(sessionName: string, cwd: string): Promise<void> {
     const name = this.sanitizeName(sessionName)
+    const configPath = getConfigPath()
     try {
-      await this.exec(['new-session', '-d', '-s', name, '-c', cwd])
+      const args = ['new-session', '-d', '-s', name, '-c', cwd]
+      if (configPath) {
+        // Source our config after session creation
+        await this.exec(args)
+        await this.exec(['source-file', configPath]).catch(() => {})
+      } else {
+        await this.exec(args)
+      }
     } catch (err) {
       console.error(`[TmuxManager] createSession failed for "${name}":`, err)
       throw err

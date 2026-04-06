@@ -51,15 +51,28 @@ function ResizeHandle({ onResize }: ResizeHandleProps): JSX.Element {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        width: 4,
+        width: 0,
         height: '100%',
         flexShrink: 0,
         cursor: 'col-resize',
-        background: hovered ? 'var(--accent)' : 'transparent',
-        transition: 'background .15s',
-        zIndex: 10,
+        position: 'relative',
+        zIndex: 20,
       }}
-    />
+    >
+      {/* Invisible wider hit area + visible indicator on hover */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: -3,
+          width: 6,
+          background: hovered ? 'var(--accent)' : 'transparent',
+          transition: 'background .15s',
+          cursor: 'col-resize',
+        }}
+      />
+    </div>
   )
 }
 
