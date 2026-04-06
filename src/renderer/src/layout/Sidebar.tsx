@@ -24,8 +24,10 @@ type SidebarView = 'explorer' | 'settings'
 type WorktreeStatus = 'active' | 'waiting' | 'idle'
 
 function useWorktreeStatus(worktreeId: string): WorktreeStatus {
-  const tabs = useTabStore((s) => s.tabsByWorktree[worktreeId] ?? [])
-  const activeTabId = useTabStore((s) => s.activeTabByWorktree[worktreeId] ?? null)
+  const tabsByWorktree = useTabStore((s) => s.tabsByWorktree)
+  const activeTabByWorktree = useTabStore((s) => s.activeTabByWorktree)
+  const tabs = tabsByWorktree[worktreeId] ?? []
+  const activeTabId = activeTabByWorktree[worktreeId] ?? null
 
   if (tabs.length === 0) return 'idle'
   const activeTab = tabs.find((t) => t.id === activeTabId)

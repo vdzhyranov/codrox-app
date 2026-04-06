@@ -39,7 +39,8 @@ interface LeafPaneProps {
 }
 
 function LeafPane({ paneId, tabId, worktreeId, isFocused, isRoot }: LeafPaneProps): JSX.Element {
-  const tabs = useTabStore((s) => s.tabsByWorktree[worktreeId] ?? [])
+  const tabsByWorktree = useTabStore((s) => s.tabsByWorktree)
+  const tabs = tabsByWorktree[worktreeId] ?? []
   const splitPane = useTabStore((s) => s.splitPane)
   const closePane = useTabStore((s) => s.closePane)
   const setPaneTab = useTabStore((s) => s.setPaneTab)

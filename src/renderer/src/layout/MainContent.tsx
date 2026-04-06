@@ -182,33 +182,12 @@ export function MainContent(): JSX.Element {
     )
   }
 
-  const mode = modeByWorktree[activeWorktreePath] ?? null
+  const mode = modeByWorktree[activeWorktreePath] ?? 'terminal'  // default to terminal (tmux)
   const lifecycle = lifecycleByWorktree[activeWorktreePath]
   const currentPhase = lifecycle?.phase ?? null
 
   // Compute tmux session name for this worktree
   const sessionName = `codrox-${activeWorktreePath.split('/').pop() || 'default'}`
-
-  // No mode selected — show mode picker
-  if (!mode) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-        <ModePicker
-          worktreePath={activeWorktreePath}
-          onSelectTerminal={() => {
-            setWorktreeMode(activeWorktreePath, 'terminal')
-          }}
-          onSelectClaude={() => {
-            setWorktreeMode(activeWorktreePath, 'claude')
-            // After tmux session is created, send claude command to the first pane
-            window.api.invoke('tmux:createSession', { name: sessionName, cwd: activeWorktreePath }).then(() => {
-              window.api.invoke('tmux:sendKeys', { name: sessionName, keys: 'claude' })
-            }).catch(() => {})
-          }}
-        />
-      </div>
-    )
-  }
 
   // Lifecycle mode — show phase track + phase content
   if (mode === 'lifecycle' && currentPhase) {

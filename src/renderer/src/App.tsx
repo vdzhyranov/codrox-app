@@ -125,10 +125,13 @@ function TitleBar(): JSX.Element {
 
 // ── App ─────────────────────────────────────────────────────────────────────
 
-const SIDEBAR_MIN = 160
-const SIDEBAR_DEFAULT = 220
-const RIGHT_MIN = 200
-const RIGHT_DEFAULT = 280
+// Percentages for layout — sidebar and right panel as % of window width
+const SIDEBAR_DEFAULT_PCT = 16  // ~220px on 1400px window
+const SIDEBAR_MIN_PCT = 10
+const SIDEBAR_MAX_PCT = 30
+const RIGHT_DEFAULT_PCT = 20    // ~280px on 1400px window
+const RIGHT_MIN_PCT = 12
+const RIGHT_MAX_PCT = 35
 
 function App(): JSX.Element {
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
@@ -139,8 +142,9 @@ function App(): JSX.Element {
   const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
   const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
 
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
-  const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT)
+  const [sidebarPct, setSidebarPct] = useState(SIDEBAR_DEFAULT_PCT)
+  const [rightPct, setRightPct] = useState(RIGHT_DEFAULT_PCT)
+  const containerRef = useRef<HTMLDivElement>(null)
   const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // On mount: load workspaces then restore session
@@ -186,11 +190,15 @@ function App(): JSX.Element {
   }, [activeWorkspaceId, activeWorktreeId, modeByWorktree])
 
   const handleSidebarResize = useCallback((delta: number) => {
-    setSidebarWidth((w) => Math.max(SIDEBAR_MIN, w + delta))
+    const width = containerRef.current?.getBoundingClientRect().width ?? 1400
+    const deltaPct = (delta / width) * 100
+    setSidebarPct((p) => Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, p + deltaPct)))
   }, [])
 
   const handleRightResize = useCallback((delta: number) => {
-    setRightWidth((w) => Math.max(RIGHT_MIN, w - delta))
+    const width = containerRef.current?.getBoundingClientRect().width ?? 1400
+    const deltaPct = (delta / width) * 100
+    setRightPct((p) => Math.min(RIGHT_MAX_PCT, Math.max(RIGHT_MIN_PCT, p - deltaPct)))
   }, [])
 
   return (
@@ -207,12 +215,11 @@ function App(): JSX.Element {
       }}
     >
       <TitleBar />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar: activity bar (48px fixed) + content panel (sidebarWidth) */}
+      <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Sidebar: activity bar (48px) + content panel (percentage) */}
         <div
           style={{
-            width: sidebarWidth + 48,
-            minWidth: sidebarWidth + 48,
+            width: `calc(${sidebarPct}% + 48px)`,
             flexShrink: 0,
             display: 'flex',
             height: '100%',
@@ -225,8 +232,10 @@ function App(): JSX.Element {
         {/* Left resize handle */}
         <ResizeHandle onResize={handleSidebarResize} />
 
-        {/* Main content */}
-        <MainContent />
+        {/* Main content — fills remaining space */}
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+          <MainContent />
+        </div>
 
         {/* Right resize handle */}
         <ResizeHandle onResize={handleRightResize} />
@@ -234,8 +243,7 @@ function App(): JSX.Element {
         {/* Right panel */}
         <div
           style={{
-            width: rightWidth,
-            minWidth: rightWidth,
+            width: `${rightPct}%`,
             flexShrink: 0,
             height: '100%',
             borderLeft: '1px solid var(--border)',
