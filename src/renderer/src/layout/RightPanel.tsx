@@ -2,10 +2,8 @@ import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useState } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
-import { useTabStore } from '@renderer/store/tabStore'
 import { FileTree } from '@renderer/components/FileTree'
 import { GitChanges } from '@renderer/components/GitChanges'
-import type { ClaudeTab as ClaudeTabType, TerminalTab as TerminalTabType } from '@shared/types'
 
 function CollapsibleSectionHeader({
   label,
@@ -75,42 +73,13 @@ function CollapsibleSectionHeader({
 export function RightPanel(): JSX.Element {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorktreePath = useActiveWorktreePath()
-  const tabsByWorktree = useTabStore((s) => s.tabsByWorktree)
-  const openTab = useTabStore((s) => s.openTab)
   const tree = useFileTreeStore((s) =>
     activeWorktreePath ? s.treeByWorktree[activeWorktreePath] : null
   )
 
   const [filesCollapsed, setFilesCollapsed] = useState(false)
 
-  const tabs = activeWorktreePath ? (tabsByWorktree[activeWorktreePath] ?? []) : []
   const fileCount = tree?.children?.length ?? 0
-
-  const handleNewTerminal = (): void => {
-    if (!activeWorktreePath) return
-    const id = `terminal-${Date.now()}`
-    const tab: TerminalTabType = {
-      id,
-      type: 'terminal',
-      title: 'Terminal',
-      worktreeId: activeWorktreePath,
-      ptyId: id,
-    }
-    openTab(activeWorktreePath, tab)
-  }
-
-  const handleNewClaude = (): void => {
-    if (!activeWorktreePath) return
-    const id = `claude-${Date.now()}`
-    const tab: ClaudeTabType = {
-      id,
-      type: 'claude',
-      title: 'Claude',
-      worktreeId: activeWorktreePath,
-      ptyId: id,
-    }
-    openTab(activeWorktreePath, tab)
-  }
 
   return (
     <div
@@ -125,75 +94,6 @@ export function RightPanel(): JSX.Element {
     >
       {activeWorktreePath ? (
         <>
-          {/* Actions section */}
-          <div
-            style={{
-              padding: '10px 12px',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex',
-              gap: 6,
-              flexShrink: 0,
-            }}
-          >
-            <button
-              onClick={handleNewClaude}
-              style={{
-                flex: 1,
-                padding: '6px 10px',
-                borderRadius: 5,
-                fontSize: 10,
-                fontFamily: 'var(--mono)',
-                cursor: 'pointer',
-                transition: 'all .12s',
-                border: '1px solid rgba(124,106,247,.35)',
-                background: 'var(--accent-dim)',
-                color: 'var(--accent2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(124,106,247,.22)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--accent-dim)'
-              }}
-            >
-              <span>◈</span>
-              <span>Claude</span>
-            </button>
-
-            <button
-              onClick={handleNewTerminal}
-              style={{
-                flex: 1,
-                padding: '6px 10px',
-                borderRadius: 5,
-                fontSize: 10,
-                fontFamily: 'var(--mono)',
-                cursor: 'pointer',
-                transition: 'all .12s',
-                border: '1px solid rgba(62,207,142,.25)',
-                background: 'var(--green-dim)',
-                color: 'var(--green)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(62,207,142,.2)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--green-dim)'
-              }}
-            >
-              <span>⟩_</span>
-              <span>Terminal</span>
-            </button>
-          </div>
-
           {/* Files section */}
           <div
             style={{
@@ -231,18 +131,15 @@ export function RightPanel(): JSX.Element {
             style={{
               borderTop: '1px solid var(--border)',
               padding: '6px 12px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
               flexShrink: 0,
               fontSize: 9,
               color: 'var(--text3)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {activeWorktreePath.split('/').pop()}
-            </span>
-            <span>{tabs.length} tabs</span>
+            {activeWorktreePath.split('/').pop()}
           </div>
         </>
       ) : (
