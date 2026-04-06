@@ -1,0 +1,19 @@
+import { IpcMain, BrowserWindow } from 'electron'
+import { subAgentWatcher } from '../services/SubAgentWatcher'
+
+export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
+  ipcMain.handle('subagents:watch', (_event, payload: { workspacePath: string }) => {
+    subAgentWatcher.start(payload.workspacePath, (newAgent) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('subagents:new', {
+          agentId: newAgent.id,
+          task: newAgent.task,
+        })
+      }
+    })
+  })
+
+  ipcMain.handle('subagents:unwatch', () => {
+    subAgentWatcher.stop()
+  })
+}

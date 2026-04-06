@@ -14,6 +14,7 @@ import {
   VerifyPhase,
   PhaseFooter,
 } from '@renderer/components/LifecyclePhases'
+import { useSubAgentWatcher } from '@renderer/hooks/useSubAgentWatcher'
 import type { LifecyclePhase } from '@shared/types'
 
 // ── Phase Track (interactive) ──────────────────────────────────────────────
@@ -184,6 +185,8 @@ export function MainContent(): JSX.Element {
   const mode = modeByWorktree[activeWorktreePath] ?? null
   const lifecycle = lifecycleByWorktree[activeWorktreePath]
   const currentPhase = lifecycle?.phase ?? null
+
+  useSubAgentWatcher(activeWorktreePath, mode === 'claude')
 
   // No mode selected — show mode picker
   if (!mode) {
