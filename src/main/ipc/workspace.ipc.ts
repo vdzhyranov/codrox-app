@@ -4,7 +4,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { persistenceService } from '../services/PersistenceService'
 import { workspaceSetup } from '../services/WorkspaceSetup'
-import type { Worktree } from '@shared/types'
+import type { Worktree, SessionData } from '@shared/types'
 import { randomUUID } from 'crypto'
 
 const execFileAsync = promisify(execFile)
@@ -158,5 +158,15 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     } catch {
       return null
     }
+  })
+
+  // Session persistence
+  ipcMain.handle('session:save', (_event, payload: SessionData) => {
+    persistenceService.saveSession(payload)
+    return { success: true }
+  })
+
+  ipcMain.handle('session:load', () => {
+    return persistenceService.loadSession()
   })
 }

@@ -18,4 +18,28 @@ export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
       return null
     }
   })
+
+  ipcMain.handle('git:revertFile', async (_event, payload: { worktreePath: string; filePath: string }) => {
+    await gitService.revertFile(payload.worktreePath, payload.filePath)
+    return { success: true }
+  })
+
+  ipcMain.handle('git:revertAll', async (_event, payload: { worktreePath: string }) => {
+    await gitService.revertAll(payload.worktreePath)
+    return { success: true }
+  })
+
+  ipcMain.handle('git:commit', async (_event, payload: { worktreePath: string; message: string }) => {
+    return gitService.commit(payload.worktreePath, payload.message)
+  })
+
+  ipcMain.handle('git:push', async (_event, payload: { worktreePath: string }) => {
+    await gitService.push(payload.worktreePath)
+    return { success: true }
+  })
+
+  ipcMain.handle('git:pull', async (_event, payload: { worktreePath: string }) => {
+    await gitService.pull(payload.worktreePath)
+    return { success: true }
+  })
 }

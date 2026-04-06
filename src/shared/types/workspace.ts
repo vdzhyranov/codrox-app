@@ -33,6 +33,12 @@ export type LifecyclePhase = 'propose' | 'grill' | 'research' | 'plan' | 'implem
 
 export type WorktreeMode = 'terminal' | 'claude' | 'lifecycle' | null
 
+export interface SessionData {
+  activeWorkspaceId: string | null
+  activeWorktreeId: string | null
+  modeByWorktree: Record<string, string>
+}
+
 export interface LifecycleState {
   phase: LifecyclePhase | null
   propose?: {

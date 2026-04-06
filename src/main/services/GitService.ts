@@ -68,6 +68,33 @@ class GitService {
     }))
   }
 
+  async revertFile(worktreePath: string, filePath: string): Promise<void> {
+    const git = simpleGit(worktreePath)
+    await git.checkout(['--', filePath])
+  }
+
+  async revertAll(worktreePath: string): Promise<void> {
+    const git = simpleGit(worktreePath)
+    await git.checkout(['--', '.'])
+  }
+
+  async commit(worktreePath: string, message: string): Promise<{ hash: string }> {
+    const git = simpleGit(worktreePath)
+    await git.add('-A')
+    const result = await git.commit(message)
+    return { hash: result.commit }
+  }
+
+  async push(worktreePath: string): Promise<void> {
+    const git = simpleGit(worktreePath)
+    await git.push()
+  }
+
+  async pull(worktreePath: string): Promise<void> {
+    const git = simpleGit(worktreePath)
+    await git.pull()
+  }
+
   async isGitRepo(worktreePath: string): Promise<boolean> {
     try {
       const git = simpleGit(worktreePath)

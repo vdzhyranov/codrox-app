@@ -1,7 +1,6 @@
-import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useState, useEffect } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
-// FileTree and GitChanges moved to RightPanel
+import { useTabStore } from '@renderer/store/tabStore'
 import type { Workspace, Worktree } from '@shared/types'
 
 // Stable color palette for workspace dots
@@ -19,6 +18,44 @@ function getDotColor(index: number): string {
 }
 
 type SidebarView = 'explorer' | 'settings'
+
+// ── Worktree status helpers ───────────────────────────────────────────────────
+
+type WorktreeStatus = 'active' | 'waiting' | 'idle'
+
+function useWorktreeStatus(worktreeId: string): WorktreeStatus {
+  const tabs = useTabStore((s) => s.tabsByWorktree[worktreeId] ?? [])
+  const activeTabId = useTabStore((s) => s.activeTabByWorktree[worktreeId] ?? null)
+
+  if (tabs.length === 0) return 'idle'
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+  if (activeTab?.type === 'claude' || activeTab?.type === 'terminal') return 'active'
+  if (tabs.some((t) => t.type === 'claude' || t.type === 'terminal')) return 'waiting'
+  return 'idle'
+}
+
+function StatusDot({ worktreeId }: { worktreeId: string }): JSX.Element {
+  const status = useWorktreeStatus(worktreeId)
+
+  const color =
+    status === 'active' ? 'var(--green)' :
+    status === 'waiting' ? 'var(--amber)' :
+    'var(--text3)'
+
+  return (
+    <div
+      style={{
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        background: color,
+        flexShrink: 0,
+        boxShadow: status === 'active' ? `0 0 4px ${color}` : 'none',
+      }}
+      className={status === 'active' ? 'pulse' : undefined}
+    />
+  )
+}
 
 // ── Activity Bar ──────────────────────────────────────────────────────────────
 
@@ -236,176 +273,6 @@ function NewWorktreeInline({
   )
 }
 
-// ── Workspace tree node ────────────────────────────────────────────────────────
-
-function WorkspaceNode({
-  workspace,
-  index,
-  isExpanded,
-  isActiveWorkspace,
-  activeWorktreeId,
-  worktrees,
-  onToggleExpand,
-  onSelectWorktree,
-  onRemoveWorkspace,
-  onRemoveWorktree,
-  onCreateWorktree,
-}: {
-  workspace: Workspace
-  index: number
-  isExpanded: boolean
-  isActiveWorkspace: boolean
-  activeWorktreeId: string | null
-  worktrees: Worktree[]
-  onToggleExpand: () => void
-  onSelectWorktree: (worktreeId: string | null) => void
-  onRemoveWorkspace: () => void
-  onRemoveWorktree: (worktreePath: string) => void
-  onCreateWorktree: (workspaceId: string, branch: string) => void
-}): JSX.Element {
-  const [hovered, setHovered] = useState(false)
-  const [showNewWorktree, setShowNewWorktree] = useState(false)
-  const dotColor = getDotColor(index)
-
-  // Sort: main first, then rest
-  const sorted = [...worktrees].sort((a, b) => {
-    if (a.isMain && !b.isMain) return -1
-    if (!a.isMain && b.isMain) return 1
-    return 0
-  })
-
-  const handleCreateWorktree = (branch: string): void => {
-    setShowNewWorktree(false)
-    onCreateWorktree(workspace.id, branch)
-  }
-
-  // The "active" worktree for display — if no activeWorktreeId, the main one is implicitly active
-  const effectiveActiveId = activeWorktreeId
-
-  return (
-    <div>
-      {/* Workspace row */}
-      <div
-        onClick={onToggleExpand}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          height: 28,
-          paddingLeft: 8,
-          paddingRight: 8,
-          cursor: 'pointer',
-          background: isActiveWorkspace && !effectiveActiveId
-            ? 'var(--accent-dim)'
-            : hovered
-              ? 'var(--surface2)'
-              : 'transparent',
-          borderLeft: isActiveWorkspace && !effectiveActiveId
-            ? '2px solid var(--accent)'
-            : '2px solid transparent',
-          gap: 5,
-          position: 'relative',
-        }}
-      >
-        {/* Expand/collapse arrow */}
-        <span
-          style={{
-            fontSize: 9,
-            color: 'var(--text3)',
-            width: 10,
-            flexShrink: 0,
-            userSelect: 'none',
-          }}
-        >
-          {isExpanded ? '▾' : '▸'}
-        </span>
-        {/* Colored dot */}
-        <div
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: dotColor,
-            flexShrink: 0,
-          }}
-        />
-        {/* Name */}
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: isActiveWorkspace ? 'var(--text)' : 'var(--text2)',
-            flex: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {workspace.name}
-        </span>
-        {/* Remove on hover */}
-        {hovered && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemoveWorkspace()
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text3)',
-              fontSize: 12,
-              lineHeight: 1,
-              padding: '0 2px',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--red)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--text3)'
-            }}
-          >
-            ×
-          </button>
-        )}
-      </div>
-
-      {/* Children: worktrees */}
-      {isExpanded && (
-        <div>
-          {sorted.map((wt) => {
-            const isActive = isActiveWorkspace && (
-              wt.isMain ? effectiveActiveId === null : effectiveActiveId === wt.id
-            )
-            return (
-              <WorktreeNode
-                key={wt.id}
-                worktree={wt}
-                isActive={isActive}
-                onSelect={() => onSelectWorktree(wt.isMain ? null : wt.id)}
-                onRemove={() => onRemoveWorktree(wt.path)}
-              />
-            )
-          })}
-
-          {/* New worktree inline */}
-          {showNewWorktree ? (
-            <NewWorktreeInline
-              onSubmit={handleCreateWorktree}
-              onCancel={() => setShowNewWorktree(false)}
-            />
-          ) : (
-            <NewWorktreeButton onClick={() => setShowNewWorktree(true)} />
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Worktree node ──────────────────────────────────────────────────────────────
 
 function WorktreeNode({
@@ -430,25 +297,17 @@ function WorktreeNode({
         display: 'flex',
         alignItems: 'center',
         height: 26,
-        paddingLeft: 28,
+        paddingLeft: 16,
         paddingRight: 8,
         cursor: 'pointer',
         background: isActive ? 'var(--accent-dim)' : hovered ? 'var(--surface2)' : 'transparent',
         borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-        gap: 5,
+        gap: 6,
         position: 'relative',
       }}
     >
-      {/* dot */}
-      <div
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: '50%',
-          background: worktree.isMain ? 'var(--green)' : 'var(--text3)',
-          flexShrink: 0,
-        }}
-      />
+      {/* status dot */}
+      <StatusDot worktreeId={worktree.id} />
       {/* branch / name */}
       <span
         style={{
@@ -506,7 +365,7 @@ function NewWorktreeButton({ onClick }: { onClick: () => void }): JSX.Element {
         display: 'flex',
         alignItems: 'center',
         height: 24,
-        paddingLeft: 36,
+        paddingLeft: 24,
         paddingRight: 8,
         cursor: 'pointer',
         gap: 4,
@@ -522,84 +381,211 @@ function NewWorktreeButton({ onClick }: { onClick: () => void }): JSX.Element {
   )
 }
 
-// ── Workspace tree (top section) ──────────────────────────────────────────────
+// ── Workspace selector card ────────────────────────────────────────────────────
 
-function WorkspaceTree({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.Element {
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
-  const worktreesByWorkspace = useWorkspaceStore((s) => s.worktreesByWorkspace)
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
-  const setActiveWorktree = useWorkspaceStore((s) => s.setActiveWorktree)
-  const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
-  const removeWorktree = useWorkspaceStore((s) => s.removeWorktree)
-  const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
-  const createWorktree = useWorkspaceStore((s) => s.createWorktree)
+function WorkspaceCard({
+  workspace,
+  index,
+  isActive,
+  onSelect,
+  onRemove,
+}: {
+  workspace: Workspace
+  index: number
+  isActive: boolean
+  onSelect: () => void
+  onRemove: () => void
+}): JSX.Element {
+  const [hovered, setHovered] = useState(false)
+  const [gitBranch, setGitBranch] = useState<string | null>(null)
+  const dotColor = getDotColor(index)
 
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
-    () => new Set(activeWorkspaceId ? [activeWorkspaceId] : []),
-  )
-
-  // Auto-expand when active workspace changes
   useEffect(() => {
-    if (activeWorkspaceId) {
-      setExpandedWorkspaces((prev) => {
-        const next = new Set(prev)
-        next.add(activeWorkspaceId)
-        return next
-      })
-    }
-  }, [activeWorkspaceId])
+    window.api.invoke('git:branch', { path: workspace.path })
+      .then((b) => setGitBranch(b as string | null))
+      .catch(() => setGitBranch(null))
+  }, [workspace.path])
 
-  const handleToggleExpand = (workspaceId: string, workspace: Workspace): void => {
-    setExpandedWorkspaces((prev) => {
-      const next = new Set(prev)
-      if (next.has(workspaceId)) {
-        next.delete(workspaceId)
-      } else {
-        next.add(workspaceId)
-        // Load worktrees when expanding
-        loadWorktrees(workspaceId, workspace.path).catch(() => {})
-      }
-      return next
-    })
-    // Clicking workspace header also selects the workspace (clears worktree selection)
-    setActiveWorkspace(workspaceId)
-  }
-
-  const handleSelectWorktree = (workspaceId: string, worktreeId: string | null): void => {
-    setActiveWorkspace(workspaceId)
-    setActiveWorktree(worktreeId)
-  }
-
-  const handleCreateWorktree = async (workspaceId: string, branch: string): Promise<void> => {
-    const workspace = workspaces.find((w) => w.id === workspaceId)
-    if (!workspace) return
-    try {
-      await createWorktree(workspaceId, workspace.path, branch, branch)
-    } catch {
-      // ignore
-    }
-  }
-
-  const handleRemoveWorktree = async (workspaceId: string, worktreePath: string): Promise<void> => {
-    await removeWorktree(workspaceId, worktreePath)
-  }
-
-  // Load worktrees for already-expanded workspaces on mount
-  useEffect(() => {
-    expandedWorkspaces.forEach((wsId) => {
-      const ws = workspaces.find((w) => w.id === wsId)
-      if (ws) {
-        loadWorktrees(ws.id, ws.path).catch(() => {})
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const lastOpened = workspace.lastOpened
+    ? new Date(workspace.lastOpened).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : null
 
   return (
-    <div style={{ flexShrink: 0 }}>
-      <SectionHeader label="Workspaces" onAdd={onAddWorkspace} addTitle="Add workspace" />
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        margin: '0 10px 8px',
+        padding: '10px 12px',
+        borderRadius: 8,
+        border: isActive
+          ? '1px solid rgba(124,106,247,.5)'
+          : hovered
+            ? '1px solid var(--border2)'
+            : '1px solid var(--border)',
+        background: isActive
+          ? 'rgba(124,106,247,.07)'
+          : hovered
+            ? 'var(--surface2)'
+            : 'var(--surface)',
+        cursor: 'pointer',
+        transition: 'all .12s',
+        position: 'relative',
+      }}
+    >
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+        <div
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: dotColor,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: isActive ? 'var(--text)' : 'var(--text2)',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {workspace.name}
+        </span>
+        {/* Remove button */}
+        {hovered && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text3)',
+              fontSize: 13,
+              lineHeight: 1,
+              padding: '0 1px',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      {/* Path */}
+      <div
+        style={{
+          fontSize: 9,
+          color: 'var(--text3)',
+          fontFamily: 'var(--mono)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          marginBottom: 6,
+        }}
+        title={workspace.path}
+      >
+        {workspace.path}
+      </div>
+
+      {/* Meta row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {gitBranch && (
+          <span
+            style={{
+              fontSize: 9,
+              color: 'var(--green)',
+              background: 'var(--green-dim)',
+              border: '1px solid rgba(62,207,142,.2)',
+              borderRadius: 4,
+              padding: '1px 5px',
+              fontFamily: 'var(--mono)',
+            }}
+          >
+            {gitBranch}
+          </span>
+        )}
+        {lastOpened && (
+          <span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 'auto' }}>
+            {lastOpened}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Add workspace card ─────────────────────────────────────────────────────────
+
+function AddWorkspaceCard({ onClick }: { onClick: () => void }): JSX.Element {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        margin: '0 10px 8px',
+        padding: '10px 12px',
+        borderRadius: 8,
+        border: hovered ? '1px solid rgba(124,106,247,.4)' : '1px dashed var(--border)',
+        background: hovered ? 'rgba(124,106,247,.04)' : 'transparent',
+        cursor: 'pointer',
+        transition: 'all .12s',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}
+    >
+      <span style={{ fontSize: 16, color: hovered ? 'var(--accent2)' : 'var(--text3)', lineHeight: 1 }}>+</span>
+      <span
+        style={{
+          fontSize: 11,
+          color: hovered ? 'var(--accent2)' : 'var(--text3)',
+          letterSpacing: '0.04em',
+        }}
+      >
+        Add Workspace
+      </span>
+    </div>
+  )
+}
+
+// ── Workspace selector (shown when no workspace selected) ──────────────────────
+
+function WorkspaceSelector({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.Element {
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
+  const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
+  const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
+
+  const handleSelect = (ws: Workspace): void => {
+    setActiveWorkspace(ws.id)
+    loadWorktrees(ws.id, ws.path).catch(() => {})
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflowY: 'auto',
+      }}
+    >
+      <SectionHeader label="Workspaces" />
       {workspaces.length === 0 ? (
         <p
           style={{
@@ -609,79 +595,212 @@ function WorkspaceTree({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.
             lineHeight: 1.6,
           }}
         >
-          Click + to add a workspace
+          Click below to add a workspace
         </p>
       ) : (
-        <div style={{ paddingBottom: 4 }}>
+        <div style={{ paddingTop: 4 }}>
           {workspaces.map((ws, i) => (
-            <WorkspaceNode
+            <WorkspaceCard
               key={ws.id}
               workspace={ws}
               index={i}
-              isExpanded={expandedWorkspaces.has(ws.id)}
-              isActiveWorkspace={ws.id === activeWorkspaceId}
-              activeWorktreeId={ws.id === activeWorkspaceId ? activeWorktreeId : null}
-              worktrees={worktreesByWorkspace[ws.id] ?? []}
-              onToggleExpand={() => handleToggleExpand(ws.id, ws)}
-              onSelectWorktree={(wtId) => handleSelectWorktree(ws.id, wtId)}
-              onRemoveWorkspace={() => removeWorkspace(ws.id)}
-              onRemoveWorktree={(path) => handleRemoveWorktree(ws.id, path)}
-              onCreateWorktree={handleCreateWorktree}
+              isActive={ws.id === activeWorkspaceId}
+              onSelect={() => handleSelect(ws)}
+              onRemove={() => removeWorkspace(ws.id)}
             />
           ))}
         </div>
       )}
+      <AddWorkspaceCard onClick={onAddWorkspace} />
     </div>
   )
 }
 
-// ── Explorer view (workspace tree + file tree + git changes) ──────────────────
+// ── Active workspace view ─────────────────────────────────────────────────────
 
-function ExplorerView({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.Element {
+function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
+  const worktreesByWorkspace = useWorkspaceStore((s) => s.worktreesByWorkspace)
+  const setActiveWorktree = useWorkspaceStore((s) => s.setActiveWorktree)
+  const removeWorktree = useWorkspaceStore((s) => s.removeWorktree)
+  const createWorktree = useWorkspaceStore((s) => s.createWorktree)
+
+  const [showNewWorktree, setShowNewWorktree] = useState(false)
+  const [backHovered, setBackHovered] = useState(false)
+
+  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
+  const worktrees = workspace ? (worktreesByWorkspace[workspace.id] ?? []) : []
+
+  const sorted = [...worktrees].sort((a, b) => {
+    if (a.isMain && !b.isMain) return -1
+    if (!a.isMain && b.isMain) return 1
+    return 0
+  })
+
+  const handleCreateWorktree = async (branch: string): Promise<void> => {
+    if (!workspace) return
+    setShowNewWorktree(false)
+    try {
+      await createWorktree(workspace.id, workspace.path, branch, branch)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleRemoveWorktree = async (worktreePath: string): Promise<void> => {
+    if (!workspace) return
+    await removeWorktree(workspace.id, worktreePath)
+  }
+
+  if (!workspace) return <div />
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Workspace + worktree tree — fills the panel */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Back button + workspace name header */}
       <div
         style={{
-          flex: 1,
-          overflowY: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '8px 10px 6px',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
         }}
       >
-        <WorkspaceTree onAddWorkspace={onAddWorkspace} />
-      </div>
-
-      {/* Placeholder when empty */}
-      {useWorkspaceStore.getState().workspaces.length === 0 && (
-        <div
+        <button
+          onClick={onBack}
+          onMouseEnter={() => setBackHovered(true)}
+          onMouseLeave={() => setBackHovered(false)}
+          title="Back to workspaces"
           style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: backHovered ? 'var(--text2)' : 'var(--text3)',
+            fontSize: 12,
+            lineHeight: 1,
+            padding: '2px 4px',
+            borderRadius: 4,
+            transition: 'color .12s',
+            flexShrink: 0,
           }}
         >
+          ←
+        </button>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--text)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}
+        >
+          {workspace.name}
+        </span>
+      </div>
+
+      {/* Worktree list */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div
+          style={{
+            padding: '8px 14px 4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: '0.12em',
+              color: 'var(--text3)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Worktrees
+          </span>
+          <button
+            onClick={() => setShowNewWorktree(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text3)',
+              fontSize: 18,
+              lineHeight: 1,
+              padding: '0 2px',
+              transition: 'color .12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+            title="Add worktree"
+          >
+            +
+          </button>
+        </div>
+
+        {sorted.map((wt) => {
+          const isActive = wt.isMain
+            ? activeWorktreeId === null
+            : activeWorktreeId === wt.id
+          return (
+            <WorktreeNode
+              key={wt.id}
+              worktree={wt}
+              isActive={isActive}
+              onSelect={() => setActiveWorktree(wt.isMain ? null : wt.id)}
+              onRemove={() => handleRemoveWorktree(wt.path)}
+            />
+          )
+        })}
+
+        {showNewWorktree ? (
+          <NewWorktreeInline
+            onSubmit={handleCreateWorktree}
+            onCancel={() => setShowNewWorktree(false)}
+          />
+        ) : (
+          sorted.length > 0 && <NewWorktreeButton onClick={() => setShowNewWorktree(true)} />
+        )}
+
+        {worktrees.length === 0 && (
           <p
             style={{
-              textAlign: 'center',
-              fontSize: 11,
+              fontSize: 10,
               color: 'var(--text3)',
+              padding: '8px 14px',
               lineHeight: 1.6,
             }}
           >
-            Select a worktree to explore files
+            No worktrees found
           </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
+}
+
+// ── Explorer view ─────────────────────────────────────────────────────────────
+
+function ExplorerView({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.Element {
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
+
+  const handleBack = (): void => {
+    setActiveWorkspace(null)
+  }
+
+  if (activeWorkspaceId) {
+    return <ActiveWorkspaceView onBack={handleBack} />
+  }
+
+  return <WorkspaceSelector onAddWorkspace={onAddWorkspace} />
 }
 
 // ── Settings view ─────────────────────────────────────────────────────────────
@@ -743,7 +862,6 @@ function SettingsView(): JSX.Element {
     setRegenerating(true)
     setSaveMsg(null)
     try {
-      // Force setup — will overwrite CLAUDE.md by writing via getProjectInfo
       const info = await window.api.invoke('workspace:getProjectInfo', { path: workspace.path }) as {
         name: string
         description: string

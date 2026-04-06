@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import type { Workspace, WorktreeState } from '@shared/types'
+import type { Workspace, WorktreeState, SessionData } from '@shared/types'
 import { randomUUID } from 'crypto'
 
 class PersistenceService {
@@ -89,6 +89,14 @@ class PersistenceService {
     this.db
       .prepare('INSERT INTO app_state (key, value_json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json')
       .run(key, json)
+  }
+
+  saveSession(data: SessionData): void {
+    this.setAppState('session', data)
+  }
+
+  loadSession(): SessionData | null {
+    return this.getAppState<SessionData>('session')
   }
 
   readWorktreeState(worktreePath: string): WorktreeState | null {

@@ -1,23 +1,73 @@
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
+import { useState } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
+import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { useTabStore } from '@renderer/store/tabStore'
 import { FileTree } from '@renderer/components/FileTree'
 import { GitChanges } from '@renderer/components/GitChanges'
 import type { ClaudeTab as ClaudeTabType, TerminalTab as TerminalTabType } from '@shared/types'
 
-function SectionHeader({ label }: { label: string }): JSX.Element {
+function CollapsibleSectionHeader({
+  label,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  label: string
+  count?: number
+  collapsed: boolean
+  onToggle: () => void
+}): JSX.Element {
   return (
     <div
+      onClick={onToggle}
       style={{
         padding: '8px 12px 4px',
-        fontSize: 9,
-        fontWeight: 600,
-        letterSpacing: '0.12em',
-        color: 'var(--text3)',
-        textTransform: 'uppercase',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: 'pointer',
+        userSelect: 'none',
       }}
     >
-      {label}
+      <span
+        style={{
+          fontSize: 9,
+          color: 'var(--text3)',
+          display: 'inline-block',
+          transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+          transition: 'transform .15s',
+        }}
+      >
+        ▾
+      </span>
+      <span
+        style={{
+          flex: 1,
+          fontSize: 9,
+          fontWeight: 600,
+          letterSpacing: '0.12em',
+          color: 'var(--text3)',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </span>
+      {count !== undefined && count > 0 && (
+        <span
+          style={{
+            fontSize: 9,
+            padding: '1px 6px',
+            borderRadius: 3,
+            background: 'var(--surface3)',
+            color: 'var(--text3)',
+            border: '1px solid var(--border)',
+            fontWeight: 600,
+          }}
+        >
+          {count}
+        </span>
+      )}
     </div>
   )
 }
@@ -27,8 +77,14 @@ export function RightPanel(): JSX.Element {
   const activeWorktreePath = useActiveWorktreePath()
   const tabsByWorktree = useTabStore((s) => s.tabsByWorktree)
   const openTab = useTabStore((s) => s.openTab)
+  const tree = useFileTreeStore((s) =>
+    activeWorktreePath ? s.treeByWorktree[activeWorktreePath] : null
+  )
+
+  const [filesCollapsed, setFilesCollapsed] = useState(false)
 
   const tabs = activeWorktreePath ? (tabsByWorktree[activeWorktreePath] ?? []) : []
+  const fileCount = tree?.children?.length ?? 0
 
   const handleNewTerminal = (): void => {
     if (!activeWorktreePath) return
@@ -141,24 +197,34 @@ export function RightPanel(): JSX.Element {
           {/* Files section */}
           <div
             style={{
-              flex: 1,
+              flex: filesCollapsed ? 0 : 1,
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
               minHeight: 0,
+              transition: 'flex .2s ease',
             }}
           >
-            <SectionHeader label="Files" />
-            <div style={{ flex: 1 }}>
+            <CollapsibleSectionHeader
+              label="Files"
+              count={fileCount}
+              collapsed={filesCollapsed}
+              onToggle={() => setFilesCollapsed((c) => !c)}
+            />
+            <div
+              style={{
+                overflow: 'hidden',
+                flex: 1,
+                maxHeight: filesCollapsed ? 0 : undefined,
+                transition: 'max-height .2s ease',
+              }}
+            >
               <FileTree />
             </div>
           </div>
 
-          {/* Git changes section */}
-          <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-            <SectionHeader label="Changes" />
-            <GitChanges />
-          </div>
+          {/* Git changes section — GitChanges renders its own collapsible header */}
+          <GitChanges />
 
           {/* Info bar */}
           <div

@@ -3,6 +3,7 @@ import { Sidebar } from '@renderer/layout/Sidebar'
 import { MainContent } from '@renderer/layout/MainContent'
 import { RightPanel } from '@renderer/layout/RightPanel'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
+import type { SessionData } from '@shared/types'
 
 // ── ResizeHandle ────────────────────────────────────────────────────────────
 
@@ -67,8 +68,6 @@ function ResizeHandle({ onResize }: ResizeHandleProps): JSX.Element {
 function TitleBar(): JSX.Element {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
-
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
 
   return (
@@ -85,7 +84,7 @@ function TitleBar(): JSX.Element {
         WebkitAppRegion: 'drag' as React.CSSProperties['WebkitAppRegion'],
       } as React.CSSProperties}
     >
-      {/* Logo — left-aligned, fixed width so pills can't overlap */}
+      {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <span style={{ color: 'var(--accent)', fontSize: 16, lineHeight: 1 }}>◈</span>
         <span
@@ -101,62 +100,25 @@ function TitleBar(): JSX.Element {
         </span>
       </div>
 
-      {/* Workspace pills — centered via flex-grow spacer */}
       <div style={{ flex: 1, minWidth: 0 }} />
-      <div
-        style={{
-          display: 'flex',
-          gap: 6,
-          WebkitAppRegion: 'no-drag',
-          flexShrink: 0,
-        } as React.CSSProperties}
-      >
-        {activeWorkspace && (
-          <span
-            style={{
-              fontSize: 10,
-              padding: '3px 10px',
-              borderRadius: 20,
-              border: '1px solid rgba(124,106,247,.3)',
-              background: 'var(--accent-dim)',
-              color: 'var(--accent2)',
-              cursor: 'default',
-            }}
-          >
-            {activeWorkspace.name}
-          </span>
-        )}
-        {workspaces
-          .filter((w) => w.id !== activeWorkspaceId)
-          .slice(0, 3)
-          .map((w) => (
-            <span
-              key={w.id}
-              onClick={() => setActiveWorkspace(w.id)}
-              style={{
-                fontSize: 10,
-                padding: '3px 10px',
-                borderRadius: 20,
-                border: '1px solid var(--border)',
-                color: 'var(--text3)',
-                cursor: 'pointer',
-                transition: 'all .15s',
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget
-                el.style.color = 'var(--text2)'
-                el.style.borderColor = 'var(--border2)'
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget
-                el.style.color = 'var(--text3)'
-                el.style.borderColor = 'var(--border)'
-              }}
-            >
-              {w.name}
-            </span>
-          ))}
-      </div>
+
+      {/* Active workspace name — right-aligned, non-interactive */}
+      {activeWorkspace && (
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--text3)',
+            letterSpacing: '0.06em',
+            fontFamily: 'var(--mono)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 200,
+          }}
+        >
+          {activeWorkspace.name}
+        </span>
+      )}
     </div>
   )
 }
@@ -170,13 +132,58 @@ const RIGHT_DEFAULT = 280
 
 function App(): JSX.Element {
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
+  const setActiveWorktree = useWorkspaceStore((s) => s.setActiveWorktree)
+  const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
+  const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
 
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT)
+  const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // On mount: load workspaces then restore session
   useEffect(() => {
-    loadWorkspaces()
+    const init = async (): Promise<void> => {
+      await loadWorkspaces()
+      try {
+        const session = await window.api.invoke('session:load', undefined) as SessionData | null
+        if (session?.activeWorkspaceId) {
+          setActiveWorkspace(session.activeWorkspaceId)
+          if (session.activeWorktreeId) {
+            setActiveWorktree(session.activeWorktreeId)
+          }
+          // Load worktrees for the restored workspace
+          const ws = useWorkspaceStore.getState().workspaces.find(
+            (w) => w.id === session.activeWorkspaceId
+          )
+          if (ws) {
+            await loadWorktrees(ws.id, ws.path).catch(() => {})
+          }
+        }
+      } catch {
+        // ignore session restore errors
+      }
+    }
+    init()
   }, [])
+
+  // Debounced session save on state changes
+  useEffect(() => {
+    if (sessionSaveTimer.current) clearTimeout(sessionSaveTimer.current)
+    sessionSaveTimer.current = setTimeout(() => {
+      const sessionData: SessionData = {
+        activeWorkspaceId,
+        activeWorktreeId,
+        modeByWorktree: modeByWorktree as Record<string, string>,
+      }
+      window.api.invoke('session:save', sessionData).catch(() => {})
+    }, 500)
+    return () => {
+      if (sessionSaveTimer.current) clearTimeout(sessionSaveTimer.current)
+    }
+  }, [activeWorkspaceId, activeWorktreeId, modeByWorktree])
 
   const handleSidebarResize = useCallback((delta: number) => {
     setSidebarWidth((w) => Math.max(SIDEBAR_MIN, w + delta))
