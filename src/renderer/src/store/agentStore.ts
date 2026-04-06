@@ -12,9 +12,22 @@ export interface Agent {
   startedAt: number
 }
 
+export interface DetectedAgent {
+  id: string
+  taskDescription: string
+  status: 'running' | 'done'
+  lastActivity: number
+  toolCalls: number
+  textMessages: number
+  filePath: string
+}
+
 interface AgentState {
   agents: Record<string, Agent>
   activeAgentId: string | null
+  detectedAgents: DetectedAgent[]
+  watchingSessionDir: string | null
+  selectedDetectedAgentId: string | null
 }
 
 interface AgentActions {
@@ -23,6 +36,10 @@ interface AgentActions {
   setActiveAgent: (id: string) => void
   setAgentStatus: (id: string, status: AgentStatus) => void
   getAgentsByWorktree: (worktreePath: string) => Agent[]
+  setDetectedAgents: (agents: DetectedAgent[]) => void
+  startWatching: (workspacePath: string) => Promise<void>
+  stopWatching: () => void
+  setSelectedDetectedAgent: (id: string | null) => void
 }
 
 type AgentStore = AgentState & AgentActions
@@ -39,6 +56,9 @@ function getNextName(agents: Record<string, Agent>, worktreePath: string): strin
 export const useAgentStore = create<AgentStore>((set, get) => ({
   agents: {},
   activeAgentId: null,
+  detectedAgents: [],
+  watchingSessionDir: null,
+  selectedDetectedAgentId: null,
 
   createAgent: (worktreePath: string, task: string): Agent => {
     const state = get()
@@ -86,5 +106,30 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
 
   getAgentsByWorktree: (worktreePath: string): Agent[] => {
     return Object.values(get().agents).filter((a) => a.worktreePath === worktreePath)
+  },
+
+  setDetectedAgents: (agents: DetectedAgent[]) => {
+    set({ detectedAgents: agents })
+  },
+
+  startWatching: async (workspacePath: string): Promise<void> => {
+    const result = await window.api.invoke('agents:watch', { workspacePath }) as { success: boolean; tasksDir?: string }
+    if (result.success && result.tasksDir) {
+      set({ watchingSessionDir: result.tasksDir })
+    }
+    // Listen for updates from main process
+    window.api.on('agents:detected', (...args: unknown[]) => {
+      const agents = args[0] as DetectedAgent[]
+      set({ detectedAgents: agents })
+    })
+  },
+
+  stopWatching: () => {
+    window.api.invoke('agents:unwatch').catch(() => {})
+    set({ watchingSessionDir: null, detectedAgents: [] })
+  },
+
+  setSelectedDetectedAgent: (id: string | null) => {
+    set({ selectedDetectedAgentId: id })
   },
 }))
