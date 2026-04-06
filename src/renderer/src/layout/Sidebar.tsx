@@ -687,26 +687,302 @@ function ExplorerView({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.E
 // ── Settings view ─────────────────────────────────────────────────────────────
 
 function SettingsView(): JSX.Element {
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const worktreesByWorkspace = useWorkspaceStore((s) => s.worktreesByWorkspace)
+
+  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null
+
+  const [claudeMd, setClaudeMd] = useState<string>('')
+  const [claudeMdLoading, setClaudeMdLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const [regenerating, setRegenerating] = useState(false)
+  const [gitBranch, setGitBranch] = useState<string | null>(null)
+
+  const worktreeCount = workspace
+    ? (worktreesByWorkspace[workspace.id] ?? []).length
+    : 0
+
+  // Load CLAUDE.md and git branch whenever the active workspace changes
+  useEffect(() => {
+    if (!workspace) return
+
+    setClaudeMdLoading(true)
+    setGitBranch(null)
+
+    window.api.invoke('workspace:readClaudeMd', { path: workspace.path })
+      .then((content) => {
+        setClaudeMd((content as string | null) ?? '')
+      })
+      .catch(() => setClaudeMd(''))
+      .finally(() => setClaudeMdLoading(false))
+
+    window.api.invoke('git:branch', { path: workspace.path })
+      .then((branch) => setGitBranch(branch as string | null))
+      .catch(() => setGitBranch(null))
+  }, [workspace?.id])
+
+  const handleSave = async (): Promise<void> => {
+    if (!workspace) return
+    setSaving(true)
+    setSaveMsg(null)
+    try {
+      await window.api.invoke('workspace:writeClaudeMd', { path: workspace.path, content: claudeMd })
+      setSaveMsg('Saved')
+      setTimeout(() => setSaveMsg(null), 2000)
+    } catch {
+      setSaveMsg('Error saving')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRegenerate = async (): Promise<void> => {
+    if (!workspace) return
+    setRegenerating(true)
+    setSaveMsg(null)
+    try {
+      // Force setup — will overwrite CLAUDE.md by writing via getProjectInfo
+      const info = await window.api.invoke('workspace:getProjectInfo', { path: workspace.path }) as {
+        name: string
+        description: string
+        techStack: string[]
+        buildCommands: string[]
+      } | null
+      if (info) {
+        const techList = info.techStack.map((t: string) => `- ${t}`).join('\n')
+        const cmdList = info.buildCommands.length > 0
+          ? info.buildCommands.map((c: string) => `- \`${c}\``).join('\n')
+          : '- (no build commands detected)'
+        const generated = `# ${info.name}\n\n## Project Overview\n${info.description}\n\n## Tech Stack\n${techList}\n\n## Development\n${cmdList}\n\n## Guidelines\n- Follow existing code patterns\n- Write tests for new functionality\n- Keep commits atomic\n`
+        setClaudeMd(generated)
+        await window.api.invoke('workspace:writeClaudeMd', { path: workspace.path, content: generated })
+        setSaveMsg('Regenerated')
+        setTimeout(() => setSaveMsg(null), 2000)
+      }
+    } catch {
+      setSaveMsg('Error regenerating')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  if (!workspace) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+        }}
+      >
+        <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text3)', lineHeight: 1.6 }}>
+          No workspace selected
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
         flex: 1,
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
+        flexDirection: 'column',
+        overflowY: 'auto',
+        padding: '12px 0',
       }}
     >
-      <p
-        style={{
-          textAlign: 'center',
-          fontSize: 11,
-          color: 'var(--text3)',
-          lineHeight: 1.6,
-        }}
-      >
-        Settings coming soon
-      </p>
+      {/* Section: Workspace Info */}
+      <div style={{ padding: '0 14px 12px' }}>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: '0.12em',
+            color: 'var(--text3)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Workspace
+        </span>
+      </div>
+
+      <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Name */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
+            NAME
+          </label>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text)',
+              padding: '5px 8px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 5,
+              fontFamily: 'var(--mono)',
+            }}
+          >
+            {workspace.name}
+          </div>
+        </div>
+
+        {/* Path */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
+            PATH
+          </label>
+          <div
+            style={{
+              fontSize: 10,
+              color: 'var(--text2)',
+              padding: '5px 8px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 5,
+              fontFamily: 'var(--mono)',
+              overflowX: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={workspace.path}
+          >
+            {workspace.path}
+          </div>
+        </div>
+
+        {/* Git branch + worktree count */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
+              BRANCH
+            </label>
+            <div
+              style={{
+                fontSize: 11,
+                color: gitBranch ? 'var(--green)' : 'var(--text3)',
+                padding: '4px 8px',
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                fontFamily: 'var(--mono)',
+              }}
+            >
+              {gitBranch ?? '—'}
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
+              WORKTREES
+            </label>
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text2)',
+                padding: '4px 8px',
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                fontFamily: 'var(--mono)',
+              }}
+            >
+              {worktreeCount || '—'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
+
+      {/* Section: CLAUDE.md */}
+      <div style={{ padding: '0 14px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: '0.12em',
+            color: 'var(--text3)',
+            textTransform: 'uppercase',
+          }}
+        >
+          CLAUDE.md
+        </span>
+        <button
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          style={{
+            background: 'var(--accent-dim)',
+            border: '1px solid var(--accent)',
+            borderRadius: 4,
+            color: 'var(--accent2)',
+            fontSize: 10,
+            padding: '2px 8px',
+            cursor: regenerating ? 'not-allowed' : 'pointer',
+            fontFamily: 'var(--mono)',
+            opacity: regenerating ? 0.6 : 1,
+            transition: 'opacity .12s',
+          }}
+        >
+          {regenerating ? '...' : 'Regenerate'}
+        </button>
+      </div>
+
+      <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {claudeMdLoading ? (
+          <div style={{ fontSize: 11, color: 'var(--text3)', padding: '8px 0' }}>Loading...</div>
+        ) : (
+          <textarea
+            value={claudeMd}
+            onChange={(e) => setClaudeMd(e.target.value)}
+            placeholder="No CLAUDE.md found. Click Regenerate to create one."
+            style={{
+              width: '100%',
+              minHeight: 220,
+              resize: 'vertical',
+              fontSize: 10,
+              lineHeight: 1.6,
+              padding: '8px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 5,
+              color: 'var(--text)',
+              fontFamily: 'var(--mono)',
+            }}
+          />
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+          {saveMsg && (
+            <span style={{ fontSize: 10, color: saveMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)' }}>
+              {saveMsg}
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || claudeMdLoading}
+            style={{
+              background: 'var(--accent)',
+              border: 'none',
+              borderRadius: 4,
+              color: '#fff',
+              fontSize: 10,
+              padding: '4px 12px',
+              cursor: saving || claudeMdLoading ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--mono)',
+              opacity: saving || claudeMdLoading ? 0.6 : 1,
+              transition: 'opacity .12s',
+            }}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

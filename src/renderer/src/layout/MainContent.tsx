@@ -4,7 +4,6 @@ import { useTabStore } from '@renderer/store/tabStore'
 import { TabBar } from '@renderer/components/TabBar'
 import { PaneArea } from '@renderer/components/PaneRenderer'
 import { DirectoryPicker } from '@renderer/components/DirectoryPicker'
-import { AgentPanel } from '@renderer/components/AgentPanel'
 import {
   ModePicker,
   ProposePhase,
@@ -232,16 +231,7 @@ export function MainContent(): JSX.Element {
     )
   }
 
-  // Claude mode — show agent management panel
-  if (mode === 'claude') {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-        <AgentPanel worktreePath={activeWorktreePath} />
-      </div>
-    )
-  }
-
-  // Terminal mode — show tabs + pane area
+  // Terminal or Claude mode — show tabs + pane area
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
       <TabBar />

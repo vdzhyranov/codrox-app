@@ -3,6 +3,7 @@ import { basename, join } from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { persistenceService } from '../services/PersistenceService'
+import { workspaceSetup } from '../services/WorkspaceSetup'
 import type { Worktree } from '@shared/types'
 import { randomUUID } from 'crypto'
 
@@ -15,10 +16,13 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     return persistenceService.saveWorkspace({ path, name: basename(path) })
   })
 
-  // Add a workspace (persist to SQLite)
-  ipcMain.handle('workspace:add', (_event, payload: { path: string }) => {
+  // Add a workspace (persist to SQLite) and set it up for Claude Code
+  ipcMain.handle('workspace:add', async (_event, payload: { path: string }) => {
     const { path } = payload
-    return persistenceService.saveWorkspace({ path, name: basename(path) })
+    const workspace = persistenceService.saveWorkspace({ path, name: basename(path) })
+    // Best-effort setup: create .claude/ dir and CLAUDE.md if missing
+    workspaceSetup.setupWorkspace(path).catch(() => {})
+    return workspace
   })
 
   // Remove a workspace by id
@@ -121,4 +125,38 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       }
     }
   )
+
+  // Run WorkspaceSetup on an existing workspace path
+  ipcMain.handle('workspace:setup', async (_event, payload: { path: string }) => {
+    try {
+      await workspaceSetup.setupWorkspace(payload.path)
+      return { success: true }
+    } catch {
+      return { success: false }
+    }
+  })
+
+  // Read CLAUDE.md from a workspace
+  ipcMain.handle('workspace:readClaudeMd', (_event, payload: { path: string }) => {
+    return workspaceSetup.readClaudeMd(payload.path)
+  })
+
+  // Write CLAUDE.md to a workspace
+  ipcMain.handle('workspace:writeClaudeMd', (_event, payload: { path: string; content: string }) => {
+    try {
+      workspaceSetup.writeClaudeMd(payload.path, payload.content)
+      return { success: true }
+    } catch {
+      return { success: false }
+    }
+  })
+
+  // Return detected project info for a workspace
+  ipcMain.handle('workspace:getProjectInfo', async (_event, payload: { path: string }) => {
+    try {
+      return await workspaceSetup.detectProjectInfo(payload.path)
+    } catch {
+      return null
+    }
+  })
 }
