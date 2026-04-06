@@ -202,17 +202,29 @@ function App(): JSX.Element {
     }
   }, [activeWorkspaceId, activeWorktreeId, modeByWorktree])
 
+  const MAIN_MIN_PCT = 35 // main content always gets at least 35%
+
   const handleSidebarResize = useCallback((delta: number) => {
     const width = containerRef.current?.getBoundingClientRect().width ?? 1400
     const deltaPct = (delta / width) * 100
-    setSidebarPct((p) => Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, p + deltaPct)))
-  }, [])
+    setSidebarPct((prev) => {
+      const next = Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, prev + deltaPct))
+      // Don't let sidebar + right panel exceed (100 - MAIN_MIN_PCT)
+      if (next + rightPct > 100 - MAIN_MIN_PCT) return prev
+      return next
+    })
+  }, [rightPct])
 
   const handleRightResize = useCallback((delta: number) => {
     const width = containerRef.current?.getBoundingClientRect().width ?? 1400
     const deltaPct = (delta / width) * 100
-    setRightPct((p) => Math.min(RIGHT_MAX_PCT, Math.max(RIGHT_MIN_PCT, p - deltaPct)))
-  }, [])
+    setRightPct((prev) => {
+      const next = Math.min(RIGHT_MAX_PCT, Math.max(RIGHT_MIN_PCT, prev - deltaPct))
+      // Don't let sidebar + right panel exceed (100 - MAIN_MIN_PCT)
+      if (sidebarPct + next > 100 - MAIN_MIN_PCT) return prev
+      return next
+    })
+  }, [sidebarPct])
 
   return (
     <div

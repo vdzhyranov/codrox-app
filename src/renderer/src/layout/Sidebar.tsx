@@ -706,8 +706,8 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         </span>
       </div>
 
-      {/* Worktree list */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      {/* Worktree list — fixed min height prevents layout jump on load */}
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 120 }}>
         <div
           style={{
             padding: '8px 14px 4px',
