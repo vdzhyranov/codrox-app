@@ -1,9 +1,10 @@
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
-import { useTabStore } from '@renderer/store/tabStore'
-import { TabBar } from '@renderer/components/TabBar'
-import { PaneArea } from '@renderer/components/PaneRenderer'
+// tabStore unused after tmux migration — keep import if lifecycle phases need it
+// import { useTabStore } from '@renderer/store/tabStore'
 import { DirectoryPicker } from '@renderer/components/DirectoryPicker'
+import { TmuxTerminal } from '@renderer/components/TmuxTerminal'
+import { TmuxInstallCheck } from '@renderer/components/TmuxInstallCheck'
 import {
   ModePicker,
   ProposePhase,
@@ -14,7 +15,6 @@ import {
   VerifyPhase,
   PhaseFooter,
 } from '@renderer/components/LifecyclePhases'
-import { useSubAgentWatcher } from '@renderer/hooks/useSubAgentWatcher'
 import type { LifecyclePhase } from '@shared/types'
 
 // ── Phase Track (interactive) ──────────────────────────────────────────────
@@ -160,7 +160,7 @@ export function MainContent(): JSX.Element {
   const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
   const lifecycleByWorktree = useWorkspaceStore((s) => s.lifecycleByWorktree)
   const setWorktreeMode = useWorkspaceStore((s) => s.setWorktreeMode)
-  const openTab = useTabStore((s) => s.openTab)
+  // openTab removed — tmux handles terminal creation now
 
   // No workspace selected — welcome screen
   if (!activeWorktreePath) {
@@ -186,7 +186,8 @@ export function MainContent(): JSX.Element {
   const lifecycle = lifecycleByWorktree[activeWorktreePath]
   const currentPhase = lifecycle?.phase ?? null
 
-  useSubAgentWatcher(activeWorktreePath, mode === 'claude')
+  // Compute tmux session name for this worktree
+  const sessionName = `codrox-${activeWorktreePath.split('/').pop() || 'default'}`
 
   // No mode selected — show mode picker
   if (!mode) {
@@ -196,25 +197,13 @@ export function MainContent(): JSX.Element {
           worktreePath={activeWorktreePath}
           onSelectTerminal={() => {
             setWorktreeMode(activeWorktreePath, 'terminal')
-            const id = `terminal-${Date.now()}`
-            openTab(activeWorktreePath, {
-              id,
-              type: 'terminal',
-              title: 'Terminal',
-              worktreeId: activeWorktreePath,
-              ptyId: id,
-            })
           }}
           onSelectClaude={() => {
             setWorktreeMode(activeWorktreePath, 'claude')
-            const id = `claude-${Date.now()}`
-            openTab(activeWorktreePath, {
-              id,
-              type: 'claude',
-              title: 'Claude',
-              worktreeId: activeWorktreePath,
-              ptyId: id,
-            })
+            // After tmux session is created, send claude command to the first pane
+            window.api.invoke('tmux:createSession', { name: sessionName, cwd: activeWorktreePath }).then(() => {
+              window.api.invoke('tmux:sendKeys', { name: sessionName, keys: 'claude' })
+            }).catch(() => {})
           }}
         />
       </div>
@@ -234,11 +223,12 @@ export function MainContent(): JSX.Element {
     )
   }
 
-  // Terminal or Claude mode — show tabs + pane area
+  // Terminal or Claude mode — show tmux terminal
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-      <TabBar />
-      <PaneArea worktreeId={activeWorktreePath} />
+      <TmuxInstallCheck>
+        <TmuxTerminal worktreePath={activeWorktreePath} sessionName={sessionName} />
+      </TmuxInstallCheck>
     </div>
   )
 }
