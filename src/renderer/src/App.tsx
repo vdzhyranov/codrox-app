@@ -249,7 +249,6 @@ function App(): JSX.Element {
         <div
           style={{
             width: `${sidebarPct}%`,
-            minWidth: 120,
             flexShrink: 0,
             flexGrow: 0,
             display: 'flex',
