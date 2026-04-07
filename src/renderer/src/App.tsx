@@ -138,13 +138,13 @@ function TitleBar(): JSX.Element {
 
 // ── App ─────────────────────────────────────────────────────────────────────
 
-// Percentages for layout — sidebar and right panel as % of window width
-const SIDEBAR_DEFAULT_PCT = 16  // ~220px on 1400px window
-const SIDEBAR_MIN_PCT = 10
-const SIDEBAR_MAX_PCT = 30
-const RIGHT_DEFAULT_PCT = 20    // ~280px on 1400px window
-const RIGHT_MIN_PCT = 12
-const RIGHT_MAX_PCT = 35
+// Layout uses 3 columns that always sum to 100% (plus 48px activity bar)
+// sidebar% + main% + right% = 100
+const SIDEBAR_DEFAULT = 18
+const SIDEBAR_MIN = 8
+const RIGHT_DEFAULT = 20
+const RIGHT_MIN = 10
+const MAIN_MIN = 30
 
 function App(): JSX.Element {
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
@@ -155,8 +155,9 @@ function App(): JSX.Element {
   const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
   const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
 
-  const [sidebarPct, setSidebarPct] = useState(SIDEBAR_DEFAULT_PCT)
-  const [rightPct, setRightPct] = useState(RIGHT_DEFAULT_PCT)
+  const [sidebarPct, setSidebarPct] = useState(SIDEBAR_DEFAULT)
+  const [rightPct, setRightPct] = useState(RIGHT_DEFAULT)
+  const mainPct = 100 - sidebarPct - rightPct
   const containerRef = useRef<HTMLDivElement>(null)
   const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -202,26 +203,29 @@ function App(): JSX.Element {
     }
   }, [activeWorkspaceId, activeWorktreeId, modeByWorktree])
 
-  const MAIN_MIN_PCT = 35 // main content always gets at least 35%
-
+  // Sidebar resize: dragging left handle changes sidebar width, main absorbs the difference
   const handleSidebarResize = useCallback((delta: number) => {
-    const width = containerRef.current?.getBoundingClientRect().width ?? 1400
-    const deltaPct = (delta / width) * 100
+    const w = containerRef.current?.getBoundingClientRect().width ?? 1400
+    const dPct = (delta / w) * 100
     setSidebarPct((prev) => {
-      const next = Math.min(SIDEBAR_MAX_PCT, Math.max(SIDEBAR_MIN_PCT, prev + deltaPct))
-      // Don't let sidebar + right panel exceed (100 - MAIN_MIN_PCT)
-      if (next + rightPct > 100 - MAIN_MIN_PCT) return prev
+      const next = prev + dPct
+      // Clamp: sidebar min, and main must stay >= MAIN_MIN
+      const remaining = 100 - next - rightPct
+      if (next < SIDEBAR_MIN) return SIDEBAR_MIN
+      if (remaining < MAIN_MIN) return 100 - MAIN_MIN - rightPct
       return next
     })
   }, [rightPct])
 
+  // Right resize: dragging right handle changes right width, main absorbs the difference
   const handleRightResize = useCallback((delta: number) => {
-    const width = containerRef.current?.getBoundingClientRect().width ?? 1400
-    const deltaPct = (delta / width) * 100
+    const w = containerRef.current?.getBoundingClientRect().width ?? 1400
+    const dPct = (delta / w) * 100
     setRightPct((prev) => {
-      const next = Math.min(RIGHT_MAX_PCT, Math.max(RIGHT_MIN_PCT, prev - deltaPct))
-      // Don't let sidebar + right panel exceed (100 - MAIN_MIN_PCT)
-      if (sidebarPct + next > 100 - MAIN_MIN_PCT) return prev
+      const next = prev - dPct // negative delta = growing right panel
+      const remaining = 100 - sidebarPct - next
+      if (next < RIGHT_MIN) return RIGHT_MIN
+      if (remaining < MAIN_MIN) return 100 - MAIN_MIN - sidebarPct
       return next
     })
   }, [sidebarPct])
@@ -241,11 +245,13 @@ function App(): JSX.Element {
     >
       <TitleBar />
       <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar: activity bar (48px) + content panel (percentage) */}
+        {/* Sidebar (activity bar 48px + content panel) */}
         <div
           style={{
-            width: `calc(${sidebarPct}% + 48px)`,
+            width: `${sidebarPct}%`,
+            minWidth: 120,
             flexShrink: 0,
+            flexGrow: 0,
             display: 'flex',
             height: '100%',
             overflow: 'hidden',
@@ -257,8 +263,18 @@ function App(): JSX.Element {
         {/* Left resize handle */}
         <ResizeHandle onResize={handleSidebarResize} />
 
-        {/* Main content — fills remaining space */}
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+        {/* Main content */}
+        <div
+          style={{
+            width: `${mainPct}%`,
+            flexShrink: 1,
+            flexGrow: 1,
+            height: '100%',
+            overflow: 'hidden',
+            display: 'flex',
+            minWidth: 0,
+          }}
+        >
           <MainContent />
         </div>
 
@@ -270,6 +286,7 @@ function App(): JSX.Element {
           style={{
             width: `${rightPct}%`,
             flexShrink: 0,
+            flexGrow: 0,
             height: '100%',
             borderLeft: '1px solid var(--border)',
             overflow: 'hidden',
