@@ -136,6 +136,18 @@ class TmuxManager {
     }
   }
 
+  async getPaneCommand(sessionName: string): Promise<string> {
+    const name = this.sanitizeName(sessionName)
+    try {
+      const output = await this.exec([
+        'display-message', '-t', name, '-p', '#{pane_current_command}'
+      ])
+      return output.trim()
+    } catch {
+      return ''
+    }
+  }
+
   async sendKeys(sessionName: string, keys: string, paneIndex?: number): Promise<void> {
     const name = this.sanitizeName(sessionName)
     const target = paneIndex !== undefined ? `${name}:${paneIndex}` : name
@@ -150,8 +162,10 @@ class TmuxManager {
   async listPanes(sessionName: string): Promise<TmuxPaneInfo[]> {
     const name = this.sanitizeName(sessionName)
     try {
+      // -s flag lists panes across ALL windows in the session
       const output = await this.exec([
         'list-panes',
+        '-s',
         '-t',
         name,
         '-F',
@@ -165,6 +179,30 @@ class TmuxManager {
           title: title || '',
           active: active === '1',
           pid: parseInt(pid, 10) || 0
+        }
+      })
+    } catch {
+      return []
+    }
+  }
+
+  async listAllPanes(): Promise<Array<{ session: string; window: string; paneIndex: number; paneTitle: string; panePid: number }>> {
+    try {
+      const output = await this.exec([
+        'list-panes',
+        '-a',
+        '-F',
+        '#{session_name}\t#{window_name}\t#{pane_index}\t#{pane_title}\t#{pane_pid}'
+      ])
+      if (!output) return []
+      return output.split('\n').filter(Boolean).map((line) => {
+        const [session, window, paneIndex, paneTitle, panePid] = line.split('\t')
+        return {
+          session: session || '',
+          window: window || '',
+          paneIndex: parseInt(paneIndex, 10) || 0,
+          paneTitle: paneTitle || '',
+          panePid: parseInt(panePid, 10) || 0,
         }
       })
     } catch {

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Sidebar } from '@renderer/layout/Sidebar'
+import { ActivityBar, SidebarContent } from '@renderer/layout/Sidebar'
 import { MainContent } from '@renderer/layout/MainContent'
 import { RightPanel } from '@renderer/layout/RightPanel'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
+import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import type { SessionData } from '@shared/types'
 
 // ── ResizeHandle ────────────────────────────────────────────────────────────
@@ -157,7 +158,6 @@ function App(): JSX.Element {
 
   const [sidebarPct, setSidebarPct] = useState(SIDEBAR_DEFAULT)
   const [rightPct, setRightPct] = useState(RIGHT_DEFAULT)
-  const mainPct = 100 - sidebarPct - rightPct
   const containerRef = useRef<HTMLDivElement>(null)
   const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -187,6 +187,21 @@ function App(): JSX.Element {
     init()
   }, [])
 
+  // Cmd+W closes active file tab instead of the app
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        const { activeTab, closeFile } = useFileTreeStore.getState()
+        if (activeTab !== 'work') {
+          e.preventDefault()
+          closeFile(activeTab)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Debounced session save on state changes
   useEffect(() => {
     if (sessionSaveTimer.current) clearTimeout(sessionSaveTimer.current)
@@ -204,9 +219,10 @@ function App(): JSX.Element {
   }, [activeWorkspaceId, activeWorktreeId, modeByWorktree])
 
   // Sidebar resize: dragging left handle changes sidebar width, main absorbs the difference
+  // Subtract 48px activity bar from total width before computing percentages
   const handleSidebarResize = useCallback((delta: number) => {
-    const w = containerRef.current?.getBoundingClientRect().width ?? 1400
-    const dPct = (delta / w) * 100
+    const totalWidth = (containerRef.current?.getBoundingClientRect().width ?? 1400) - 48
+    const dPct = (delta / totalWidth) * 100
     setSidebarPct((prev) => {
       const next = prev + dPct
       // Clamp: sidebar min, and main must stay >= MAIN_MIN
@@ -218,9 +234,10 @@ function App(): JSX.Element {
   }, [rightPct])
 
   // Right resize: dragging right handle changes right width, main absorbs the difference
+  // Subtract 48px activity bar from total width before computing percentages
   const handleRightResize = useCallback((delta: number) => {
-    const w = containerRef.current?.getBoundingClientRect().width ?? 1400
-    const dPct = (delta / w) * 100
+    const totalWidth = (containerRef.current?.getBoundingClientRect().width ?? 1400) - 48
+    const dPct = (delta / totalWidth) * 100
     setRightPct((prev) => {
       const next = prev - dPct // negative delta = growing right panel
       const remaining = 100 - sidebarPct - next
@@ -245,29 +262,32 @@ function App(): JSX.Element {
     >
       <TitleBar />
       <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar (activity bar 48px + content panel) */}
+        {/* Column 1: Activity bar — fixed 48px, outside the percentage system */}
+        <div style={{ width: 48, minWidth: 48, flexShrink: 0, height: '100%' }}>
+          <ActivityBar />
+        </div>
+
+        {/* Column 2: Workspace list — percentage based */}
         <div
           style={{
             width: `${sidebarPct}%`,
             flexShrink: 0,
             flexGrow: 0,
-            display: 'flex',
             height: '100%',
             overflow: 'hidden',
+            borderRight: '1px solid var(--border)',
           }}
         >
-          <Sidebar />
+          <SidebarContent />
         </div>
 
         {/* Left resize handle */}
         <ResizeHandle onResize={handleSidebarResize} />
 
-        {/* Main content */}
+        {/* Column 3: Main content */}
         <div
           style={{
-            width: `${mainPct}%`,
-            flexShrink: 1,
-            flexGrow: 1,
+            flex: 1,
             height: '100%',
             overflow: 'hidden',
             display: 'flex',
@@ -280,7 +300,7 @@ function App(): JSX.Element {
         {/* Right resize handle */}
         <ResizeHandle onResize={handleRightResize} />
 
-        {/* Right panel */}
+        {/* Column 4: Files panel */}
         <div
           style={{
             width: `${rightPct}%`,

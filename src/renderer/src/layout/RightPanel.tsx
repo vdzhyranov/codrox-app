@@ -4,6 +4,7 @@ import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { FileTree } from '@renderer/components/FileTree'
 import { GitChanges } from '@renderer/components/GitChanges'
+import { AgentList } from '@renderer/components/AgentList'
 
 function CollapsibleSectionHeader({
   label,
@@ -78,6 +79,7 @@ export function RightPanel(): JSX.Element {
   )
 
   const [filesCollapsed, setFilesCollapsed] = useState(false)
+  const [agentsCollapsed, setAgentsCollapsed] = useState(false)
 
   const fileCount = tree?.children?.length ?? 0
 
@@ -94,15 +96,29 @@ export function RightPanel(): JSX.Element {
     >
       {activeWorktreePath ? (
         <>
+          {/* Agents section */}
+          <div style={{ flexShrink: 0 }}>
+            <CollapsibleSectionHeader
+              label="Agents"
+              collapsed={agentsCollapsed}
+              onToggle={() => setAgentsCollapsed((c) => !c)}
+            />
+            {!agentsCollapsed && <AgentList />}
+          </div>
+
+          {/* Git changes section */}
+          <GitChanges />
+
           {/* Files section */}
           <div
             style={{
-              flex: filesCollapsed ? 0 : 1,
-              overflowY: 'auto',
+              flex: filesCollapsed ? undefined : 1,
+              flexShrink: filesCollapsed ? 0 : undefined,
+              overflowY: filesCollapsed ? 'hidden' : 'auto',
               display: 'flex',
               flexDirection: 'column',
               minHeight: 0,
-              transition: 'flex .2s ease',
+              borderTop: '1px solid var(--border)',
             }}
           >
             <CollapsibleSectionHeader
@@ -111,20 +127,18 @@ export function RightPanel(): JSX.Element {
               collapsed={filesCollapsed}
               onToggle={() => setFilesCollapsed((c) => !c)}
             />
-            <div
-              style={{
-                overflow: 'hidden',
-                flex: 1,
-                maxHeight: filesCollapsed ? 0 : undefined,
-                transition: 'max-height .2s ease',
-              }}
-            >
-              <FileTree />
-            </div>
+            {!filesCollapsed && (
+              <div
+                style={{
+                  overflow: 'auto',
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                <FileTree />
+              </div>
+            )}
           </div>
-
-          {/* Git changes section — GitChanges renders its own collapsible header */}
-          <GitChanges />
 
           {/* Info bar */}
           <div

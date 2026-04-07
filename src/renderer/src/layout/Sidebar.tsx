@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
-import { useTabStore } from '@renderer/store/tabStore'
+import { useSidebarStore } from '@renderer/store/sidebarStore'
+import { AgentPanel } from '@renderer/components/AgentPanel'
 import type { Workspace, Worktree } from '@shared/types'
 
 // Stable color palette for workspace dots
@@ -23,29 +24,59 @@ type SidebarView = 'explorer' | 'settings'
 
 type WorktreeStatus = 'active' | 'waiting' | 'idle'
 
-function useWorktreeStatus(worktreeId: string): WorktreeStatus {
-  const tabsByWorktree = useTabStore((s) => s.tabsByWorktree)
-  const activeTabByWorktree = useTabStore((s) => s.activeTabByWorktree)
-  const tabs = tabsByWorktree[worktreeId] ?? []
-  const activeTabId = activeTabByWorktree[worktreeId] ?? null
+function useWorktreeStatus(worktreePath: string): WorktreeStatus {
+  const [status, setStatus] = useState<WorktreeStatus>('idle')
 
-  if (tabs.length === 0) return 'idle'
-  const activeTab = tabs.find((t) => t.id === activeTabId)
-  if (activeTab?.type === 'claude' || activeTab?.type === 'terminal') return 'active'
-  if (tabs.some((t) => t.type === 'claude' || t.type === 'terminal')) return 'waiting'
-  return 'idle'
+  useEffect(() => {
+    let cancelled = false
+    const worktreeBase = (worktreePath.split('/').pop() ?? 'workspace').replace(/[^a-zA-Z0-9-]/g, '-')
+    const sessionName = `codrox-${worktreeBase}-claude-main`
+
+    const check = async (): Promise<void> => {
+      if (cancelled) return
+      try {
+        const exists = await window.api.invoke('tmux:hasSession', { name: sessionName })
+        if (!exists) {
+          setStatus('idle')
+          return
+        }
+        const cmd = (await window.api.invoke('tmux:getPaneCommand', { name: sessionName })) as string
+        const trimmed = cmd.trim()
+        if (/^(zsh|bash|sh|fish|login|-zsh|-bash)$/i.test(trimmed) || !trimmed) {
+          setStatus('waiting') // at shell prompt — waiting for user
+        } else {
+          setStatus('active') // claude or other process running
+        }
+      } catch {
+        setStatus('idle')
+      }
+    }
+
+    check()
+    const interval = setInterval(check, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [worktreePath])
+
+  return status
 }
 
-function StatusDot({ worktreeId }: { worktreeId: string }): JSX.Element {
-  const status = useWorktreeStatus(worktreeId)
+function StatusDot({ worktreePath }: { worktreePath: string }): JSX.Element {
+  const status = useWorktreeStatus(worktreePath)
 
+  // green = idle/ready, yellow = claude working, pink = waiting for user
   const color =
-    status === 'active' ? 'var(--green)' :
-    status === 'waiting' ? 'var(--amber)' :
-    'var(--text3)'
+    status === 'active' ? 'var(--amber)' :
+    status === 'waiting' ? 'var(--pink)' :
+    'var(--green)'
+
+  const title =
+    status === 'active' ? 'Working' :
+    status === 'waiting' ? 'Waiting for response' :
+    'Ready'
 
   return (
     <div
+      title={title}
       style={{
         width: 6,
         height: 6,
@@ -61,17 +92,14 @@ function StatusDot({ worktreeId }: { worktreeId: string }): JSX.Element {
 
 // ── Activity Bar ──────────────────────────────────────────────────────────────
 
-function ActivityBar({
-  activeView,
-  onSelect,
-}: {
-  activeView: SidebarView
-  onSelect: (view: SidebarView) => void
-}): JSX.Element {
+export function ActivityBar(): JSX.Element {
+  const activeView = useSidebarStore((s) => s.activeView)
+  const setActiveView = useSidebarStore((s) => s.setActiveView)
   const [hoveredId, setHoveredId] = useState<SidebarView | null>(null)
 
   const items: { id: SidebarView; icon: string; label: string }[] = [
     { id: 'explorer', icon: '◈', label: 'Explorer' },
+    { id: 'agents', icon: '⊛', label: 'Agents' },
     { id: 'settings', icon: '⚙', label: 'Settings' },
   ]
 
@@ -98,7 +126,7 @@ function ActivityBar({
           <div
             key={item.id}
             title={item.label}
-            onClick={() => onSelect(item.id)}
+            onClick={() => setActiveView(item.id)}
             onMouseEnter={() => setHoveredId(item.id)}
             onMouseLeave={() => setHoveredId(null)}
             style={{
@@ -282,17 +310,76 @@ function WorktreeNode({
   isActive,
   onSelect,
   onRemove,
+  onRename,
 }: {
   worktree: Worktree
   isActive: boolean
   onSelect: () => void
   onRemove: () => void
+  onRename?: (newName: string) => void
 }): JSX.Element {
   const [hovered, setHovered] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(worktree.branch || worktree.name)
+
+  const handleDoubleClick = (e: React.MouseEvent): void => {
+    if (worktree.isMain || !onRename) return
+    e.stopPropagation()
+    setEditing(true)
+    setEditValue(worktree.branch || worktree.name)
+  }
+
+  const handleRenameSubmit = (): void => {
+    if (editValue.trim() && onRename) {
+      onRename(editValue.trim())
+    }
+    setEditing(false)
+  }
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter') handleRenameSubmit()
+    if (e.key === 'Escape') setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: 26,
+          paddingLeft: 16,
+          paddingRight: 8,
+          gap: 4,
+        }}
+      >
+        <input
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleRenameKeyDown}
+          onBlur={handleRenameSubmit}
+          autoFocus
+          style={{
+            flex: 1,
+            padding: '2px 6px',
+            fontSize: 11,
+            background: 'var(--surface2)',
+            border: '1px solid var(--accent)',
+            borderRadius: 4,
+            color: 'var(--text)',
+            fontFamily: 'var(--mono)',
+            outline: 'none',
+            height: 20,
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <div
       onClick={onSelect}
+      onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -309,7 +396,7 @@ function WorktreeNode({
       }}
     >
       {/* status dot */}
-      <StatusDot worktreeId={worktree.id} />
+      <StatusDot worktreePath={worktree.path} />
       {/* branch / name */}
       <span
         style={{
@@ -323,8 +410,8 @@ function WorktreeNode({
       >
         {worktree.branch || worktree.name}
       </span>
-      {/* remove non-main on hover */}
-      {hovered && !worktree.isMain && (
+      {/* remove worktree */}
+      {!worktree.isMain && (
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -339,6 +426,8 @@ function WorktreeNode({
             lineHeight: 1,
             padding: '0 2px',
             flexShrink: 0,
+            opacity: hovered ? 1 : 0.3,
+            transition: 'opacity .12s, color .12s',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = 'var(--red)'
@@ -461,28 +550,28 @@ function WorkspaceCard({
           {workspace.name}
         </span>
         {/* Remove button */}
-        {hovered && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemove()
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text3)',
-              fontSize: 13,
-              lineHeight: 1,
-              padding: '0 1px',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-          >
-            ×
-          </button>
-        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text3)',
+            fontSize: 13,
+            lineHeight: 1,
+            padding: '0 1px',
+            flexShrink: 0,
+            opacity: hovered ? 1 : 0.3,
+            transition: 'opacity .12s, color .12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+        >
+          ×
+        </button>
       </div>
 
       {/* Path */}
@@ -628,6 +717,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
   const setActiveWorktree = useWorkspaceStore((s) => s.setActiveWorktree)
   const removeWorktree = useWorkspaceStore((s) => s.removeWorktree)
   const createWorktree = useWorkspaceStore((s) => s.createWorktree)
+  const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
 
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   const [backHovered, setBackHovered] = useState(false)
@@ -641,6 +731,23 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
     return 0
   })
 
+  const generateRandomName = (): string => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    let id = ''
+    for (let i = 0; i < 5; i++) id += chars[Math.floor(Math.random() * chars.length)]
+    return `task-${id}`
+  }
+
+  const handleCreateWorktreeQuick = async (): Promise<void> => {
+    if (!workspace) return
+    const name = generateRandomName()
+    try {
+      await createWorktree(workspace.id, workspace.path, name, name)
+    } catch {
+      // ignore
+    }
+  }
+
   const handleCreateWorktree = async (branch: string): Promise<void> => {
     if (!workspace) return
     setShowNewWorktree(false)
@@ -653,7 +760,24 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
 
   const handleRemoveWorktree = async (worktreePath: string): Promise<void> => {
     if (!workspace) return
-    await removeWorktree(workspace.id, worktreePath)
+    await removeWorktree(workspace.id, workspace.path, worktreePath)
+  }
+
+  const handleRenameWorktree = async (wt: Worktree, newName: string): Promise<void> => {
+    if (!workspace) return
+    const oldBranch = wt.branch || wt.name
+    if (oldBranch === newName) return
+    try {
+      await window.api.invoke('git:renameBranch', {
+        worktreePath: wt.path,
+        oldName: oldBranch,
+        newName,
+      })
+      // Reload worktrees to reflect the change
+      await loadWorktrees(workspace.id, workspace.path)
+    } catch {
+      // ignore rename errors
+    }
   }
 
   if (!workspace) return <div />
@@ -728,7 +852,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
             Worktrees
           </span>
           <button
-            onClick={() => setShowNewWorktree(true)}
+            onClick={handleCreateWorktreeQuick}
             style={{
               background: 'none',
               border: 'none',
@@ -741,7 +865,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-            title="Add worktree"
+            title="Quick-create worktree"
           >
             +
           </button>
@@ -758,17 +882,46 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
               isActive={isActive}
               onSelect={() => setActiveWorktree(wt.isMain ? null : wt.id)}
               onRemove={() => handleRemoveWorktree(wt.path)}
+              onRename={(newName) => handleRenameWorktree(wt, newName)}
             />
           )
         })}
 
-        {showNewWorktree ? (
+        {showNewWorktree && (
           <NewWorktreeInline
             onSubmit={handleCreateWorktree}
             onCancel={() => setShowNewWorktree(false)}
           />
-        ) : (
-          sorted.length > 0 && <NewWorktreeButton onClick={() => setShowNewWorktree(true)} />
+        )}
+        {!showNewWorktree && sorted.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 16, paddingRight: 8, height: 24 }}>
+            <div
+              onClick={handleCreateWorktreeQuick}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: 0.5, transition: 'opacity .12s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
+            >
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>+</span>
+              <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.04em' }}>Quick worktree</span>
+            </div>
+            <button
+              onClick={() => setShowNewWorktree(true)}
+              title="Custom branch name"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text3)',
+                fontSize: 10,
+                padding: '0 2px',
+                transition: 'color .12s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+            >
+              ✎
+            </button>
+          </div>
         )}
 
         {worktrees.length === 0 && (
@@ -1107,11 +1260,11 @@ function SettingsView(): JSX.Element {
   )
 }
 
-// ── Main Sidebar export ────────────────────────────────────────────────────────
+// ── SidebarContent export (workspace list / settings panel, no activity bar) ──
 
-export function Sidebar(): JSX.Element {
+export function SidebarContent(): JSX.Element {
+  const activeView = useSidebarStore((s) => s.activeView)
   const addWorkspace = useWorkspaceStore((s) => s.addWorkspace)
-  const [activeView, setActiveView] = useState<SidebarView>('explorer')
 
   const handleAddWorkspace = async (): Promise<void> => {
     const result = await window.api.invoke('dialog:openDirectory', undefined)
@@ -1122,26 +1275,19 @@ export function Sidebar(): JSX.Element {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', flexShrink: 0 }}>
-      {/* Activity bar */}
-      <ActivityBar activeView={activeView} onSelect={setActiveView} />
-
-      {/* Content panel */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'var(--surface)',
-          borderRight: '1px solid var(--border)',
-          overflow: 'hidden',
-          height: '100%',
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        {activeView === 'explorer' && <ExplorerView onAddWorkspace={handleAddWorkspace} />}
-        {activeView === 'settings' && <SettingsView />}
-      </div>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--surface)',
+        overflow: 'hidden',
+        height: '100%',
+        width: '100%',
+      }}
+    >
+      {activeView === 'explorer' && <ExplorerView onAddWorkspace={handleAddWorkspace} />}
+      {activeView === 'agents' && <AgentPanel />}
+      {activeView === 'settings' && <SettingsView />}
     </div>
   )
 }

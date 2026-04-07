@@ -1,0 +1,412 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775502023170,
+  "projectRoot": "/Applications/Development/codrox-app",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "19.2.4",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.4",
+        "category": "frontend"
+      },
+      {
+        "name": "@playwright/test",
+        "version": "1.59.1",
+        "category": "testing"
+      },
+      {
+        "name": "vite",
+        "version": "7.3.1",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "4.1.2",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "electron-vite dev",
+      "build": "electron-vite build",
+      "preview": "electron-vite preview",
+      "build:win": "npm run build && electron-builder --win",
+      "build:mac": "npm run build && electron-builder --mac",
+      "build:linux": "npm run build && electron-builder --linux",
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run",
+      "postinstall": "electron-rebuild"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "src"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "out": {
+      "path": "out",
+      "purpose": "Build output",
+      "fileCount": 0,
+      "lastAccessed": 1775502023162,
+      "keyFiles": []
+    },
+    "resources": {
+      "path": "resources",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775502023162,
+      "keyFiles": []
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 0,
+      "lastAccessed": 1775502023165,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/renderer/src/layout/Sidebar.tsx",
+      "accessCount": 86,
+      "lastAccessed": 1775581414319,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/layout/MainContent.tsx",
+      "accessCount": 66,
+      "lastAccessed": 1775580765724,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/App.tsx",
+      "accessCount": 58,
+      "lastAccessed": 1775564031548,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 56,
+      "lastAccessed": 1775564061746,
+      "type": "directory"
+    },
+    {
+      "path": "src/renderer/src/layout/RightPanel.tsx",
+      "accessCount": 50,
+      "lastAccessed": 1775582500611,
+      "type": "file"
+    },
+    {
+      "path": "src/main/ipc/workspace.ipc.ts",
+      "accessCount": 28,
+      "lastAccessed": 1775579867141,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/store/workspaceStore.ts",
+      "accessCount": 27,
+      "lastAccessed": 1775579777225,
+      "type": "file"
+    },
+    {
+      "path": "src/main/ipc/index.ts",
+      "accessCount": 25,
+      "lastAccessed": 1775582319672,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/workspace.ts",
+      "accessCount": 24,
+      "lastAccessed": 1775564062094,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/assets/main.css",
+      "accessCount": 23,
+      "lastAccessed": 1775558538735,
+      "type": "file"
+    },
+    {
+      "path": "src/main/index.ts",
+      "accessCount": 23,
+      "lastAccessed": 1775564015932,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 23,
+      "lastAccessed": 1775564061539,
+      "type": "file"
+    },
+    {
+      "path": "src/preload/index.ts",
+      "accessCount": 22,
+      "lastAccessed": 1775580588879,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/hooks/usePTY.ts",
+      "accessCount": 21,
+      "lastAccessed": 1775564049216,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/ipc.ts",
+      "accessCount": 21,
+      "lastAccessed": 1775579748362,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/TabBar.tsx",
+      "accessCount": 20,
+      "lastAccessed": 1775563378414,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/FileTree.tsx",
+      "accessCount": 20,
+      "lastAccessed": 1775582555962,
+      "type": "file"
+    },
+    {
+      "path": "src/main/ipc/pty.ipc.ts",
+      "accessCount": 19,
+      "lastAccessed": 1775564026063,
+      "type": "file"
+    },
+    {
+      "path": "src/main/services/PTYManager.ts",
+      "accessCount": 19,
+      "lastAccessed": 1775580570806,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/store/tabStore.ts",
+      "accessCount": 18,
+      "lastAccessed": 1775564012176,
+      "type": "file"
+    },
+    {
+      "path": "src/main/ipc/git.ipc.ts",
+      "accessCount": 18,
+      "lastAccessed": 1775564037611,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/tabs.ts",
+      "accessCount": 15,
+      "lastAccessed": 1775563349465,
+      "type": "file"
+    },
+    {
+      "path": "src/main/services/GitService.ts",
+      "accessCount": 14,
+      "lastAccessed": 1775564041560,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/index.ts",
+      "accessCount": 14,
+      "lastAccessed": 1775564059193,
+      "type": "file"
+    },
+    {
+      "path": "src/main/services/PersistenceService.ts",
+      "accessCount": 13,
+      "lastAccessed": 1775564032994,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/GitChanges.tsx",
+      "accessCount": 13,
+      "lastAccessed": 1775564036627,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/store/fileTreeStore.ts",
+      "accessCount": 13,
+      "lastAccessed": 1775564042925,
+      "type": "file"
+    },
+    {
+      "path": "src/main/ipc/filesystem.ipc.ts",
+      "accessCount": 11,
+      "lastAccessed": 1775564034312,
+      "type": "file"
+    },
+    {
+      "path": ".claude/reports/03-research-landscape.md",
+      "accessCount": 10,
+      "lastAccessed": 1775413699928,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/tabs/TerminalTab.tsx",
+      "accessCount": 9,
+      "lastAccessed": 1775563381274,
+      "type": "file"
+    },
+    {
+      "path": "src/preload/index.d.ts",
+      "accessCount": 8,
+      "lastAccessed": 1775562055902,
+      "type": "file"
+    },
+    {
+      "path": "codrox.md",
+      "accessCount": 7,
+      "lastAccessed": 1775412910090,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.json",
+      "accessCount": 7,
+      "lastAccessed": 1775564031712,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/main.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1775421395087,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/git.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775500670305,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/lib/ipc.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775564049183,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/index.html",
+      "accessCount": 6,
+      "lastAccessed": 1775564054060,
+      "type": "file"
+    },
+    {
+      "path": "electron.vite.config.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775564055107,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/filesystem.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775582229305,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/components/DirectoryPicker.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775421537516,
+      "type": "file"
+    },
+    {
+      "path": "src/main/services/FileWatcher.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775564028414,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "accessCount": 5,
+      "lastAccessed": 1775564034981,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.web.json",
+      "accessCount": 5,
+      "lastAccessed": 1775564035502,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/env.d.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775562056300,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/store/gitStore.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775564011454,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/lib/constants.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775421000407,
+      "type": "file"
+    },
+    {
+      "path": ".claude/reports/01-analyst-requirements.md",
+      "accessCount": 2,
+      "lastAccessed": 1775412910442,
+      "type": "file"
+    },
+    {
+      "path": ".claude/reports/02-architect-review.md",
+      "accessCount": 2,
+      "lastAccessed": 1775412910985,
+      "type": "file"
+    },
+    {
+      "path": ".claude/reports/04-verifier-feasibility.md",
+      "accessCount": 2,
+      "lastAccessed": 1775412911817,
+      "type": "file"
+    },
+    {
+      "path": ".claude/reports/05-critic-review.md",
+      "accessCount": 2,
+      "lastAccessed": 1775412912032,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

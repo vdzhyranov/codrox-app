@@ -95,6 +95,11 @@ class GitService {
     await git.pull()
   }
 
+  async renameBranch(worktreePath: string, oldName: string, newName: string): Promise<void> {
+    const git = simpleGit(worktreePath)
+    await git.branch(['-m', oldName, newName])
+  }
+
   async isGitRepo(worktreePath: string): Promise<boolean> {
     try {
       const git = simpleGit(worktreePath)

@@ -37,8 +37,12 @@ export interface IpcChannels {
     response: Worktree[]
   }
   'worktree:remove': {
-    request: { workspaceId: string; worktreePath: string }
+    request: { workspaceId: string; workspacePath: string; worktreePath: string }
     response: { success: boolean }
+  }
+  'git:renameBranch': {
+    request: { worktreePath: string; oldName: string; newName: string }
+    response: void
   }
   'dialog:openDirectory': {
     request: void

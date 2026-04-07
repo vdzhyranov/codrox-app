@@ -14,7 +14,8 @@
     "build:linux": "npm run build && electron-builder --linux",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "postinstall": "electron-rebuild"
+    "postinstall": "electron-rebuild",
+    "dist": "electron-builder"
   },
   "build": {
     "appId": "com.codrox.app",
@@ -31,7 +32,13 @@
       "!{tsconfig.json,tsconfig.*.json,electron.vite.config.*,vite.config.*}",
       "!{karma.conf.js,.babelrc,.babelrc.js,jest.config.js,.mocharc.yml}",
       "!src/**"
-    ]
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",

@@ -14,7 +14,7 @@ export function useTmuxPTY({ sessionName, worktreePath, containerRef }: UseTmuxP
     const container = containerRef.current
     if (!container) return
 
-    const ptyId = `tmux-${sessionName}`
+    const ptyId = `tmux-${sessionName}-${Date.now()}`
     let cancelled = false
     let rafId: number | null = null
     let cleanup: (() => void) | null = null

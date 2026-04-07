@@ -1,20 +1,148 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useTmuxPTY } from '@renderer/hooks/useTmuxPTY'
+import { useFileTreeStore } from '@renderer/store/fileTreeStore'
+import { FileViewer } from '@renderer/components/FileViewer'
+import { AgentOutputViewer } from '@renderer/components/AgentOutputViewer'
+
+// ── AgentTerminal (attaches to existing tmux session) ─────────────────────────
+
+function AgentTerminal({
+  sessionName,
+  worktreePath,
+}: {
+  sessionName: string
+  worktreePath: string
+}): JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Attach to the agent's existing tmux session (don't create a new one)
+  useTmuxPTY({ sessionName, worktreePath, containerRef })
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: '#0a0a0b',
+      }}
+    >
+      <div
+        ref={containerRef}
+        style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
+      />
+    </div>
+  )
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface Panel {
+interface PaneLeaf {
+  type: 'leaf'
   id: string
-  type: 'claude' | 'terminal'
+  panelType: 'claude' | 'terminal'
   title: string
-  widthPercent: number
-  collapsed: boolean
   sessionName: string
 }
+
+interface PaneSplit {
+  type: 'split'
+  id: string
+  direction: 'horizontal' | 'vertical'
+  ratio: number
+  first: PaneNode
+  second: PaneNode
+}
+
+type PaneNode = PaneLeaf | PaneSplit
+type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center'
 
 interface BottomTerminal {
   sessionName: string
   collapsed: boolean
+}
+
+// ── Tree Helpers ──────────────────────────────────────────────────────────────
+
+let _idCounter = 0
+function makeId(): string {
+  return `pane-${Date.now()}-${++_idCounter}`
+}
+
+function removePane(root: PaneNode, id: string): PaneNode | null {
+  if (root.type === 'leaf') {
+    return root.id === id ? null : root
+  }
+  if (root.first.type === 'leaf' && root.first.id === id) return root.second
+  if (root.second.type === 'leaf' && root.second.id === id) return root.first
+
+  const newFirst = removePane(root.first, id)
+  if (newFirst !== root.first) {
+    return newFirst === null ? root.second : { ...root, first: newFirst }
+  }
+  const newSecond = removePane(root.second, id)
+  if (newSecond !== root.second) {
+    return newSecond === null ? root.first : { ...root, second: newSecond }
+  }
+  return root
+}
+
+function insertAtPane(
+  root: PaneNode,
+  targetId: string,
+  newLeaf: PaneLeaf,
+  zone: DropZone,
+): PaneNode {
+  if (root.type === 'leaf') {
+    if (root.id !== targetId) return root
+
+    const direction: 'horizontal' | 'vertical' =
+      zone === 'left' || zone === 'right' ? 'horizontal' : 'vertical'
+
+    const first = zone === 'right' || zone === 'bottom' ? root : newLeaf
+    const second = zone === 'right' || zone === 'bottom' ? newLeaf : root
+
+    return {
+      type: 'split',
+      id: makeId(),
+      direction,
+      ratio: 0.5,
+      first,
+      second,
+    }
+  }
+
+  return {
+    ...root,
+    first: insertAtPane(root.first, targetId, newLeaf, zone),
+    second: insertAtPane(root.second, targetId, newLeaf, zone),
+  }
+}
+
+function updateRatio(root: PaneNode, splitId: string, ratio: number): PaneNode {
+  if (root.type === 'leaf') return root
+  if (root.id === splitId) return { ...root, ratio: Math.max(0.15, Math.min(0.85, ratio)) }
+  return {
+    ...root,
+    first: updateRatio(root.first, splitId, ratio),
+    second: updateRatio(root.second, splitId, ratio),
+  }
+}
+
+function findFirstLeafId(node: PaneNode): string {
+  if (node.type === 'leaf') return node.id
+  return findFirstLeafId(node.first)
+}
+
+function countLeaves(node: PaneNode): number {
+  if (node.type === 'leaf') return 1
+  return countLeaves(node.first) + countLeaves(node.second)
+}
+
+function findLeafById(node: PaneNode, id: string): PaneLeaf | null {
+  if (node.type === 'leaf') return node.id === id ? node : null
+  return findLeafById(node.first, id) ?? findLeafById(node.second, id)
 }
 
 // ── PanelTerminal ──────────────────────────────────────────────────────────────
@@ -27,44 +155,76 @@ interface PanelTerminalProps {
 
 function PanelTerminal({ sessionName, worktreePath, type }: PanelTerminalProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  const didSendCommand = useRef(false)
+  const didLaunch = useRef(false)
 
   useTmuxPTY({ sessionName, worktreePath, containerRef })
 
-  // For claude panels, send the `claude` command once after session creation
+  // For claude panels: auto-launch claude if the pane is at a shell prompt
   useEffect(() => {
-    if (type !== 'claude' || didSendCommand.current) return
+    if (type !== 'claude' || didLaunch.current) return
 
-    // Delay to let tmux session initialize
-    const t = setTimeout(async () => {
-      if (didSendCommand.current) return
+    let cancelled = false
+    let attempts = 0
+    const maxAttempts = 8
+
+    const poll = async (): Promise<void> => {
+      if (cancelled || attempts >= maxAttempts) return
+      attempts++
+
       try {
-        await window.api.invoke('tmux:sendKeys', { name: sessionName, keys: 'claude' })
-        didSendCommand.current = true
-      } catch {
-        // session may not be ready yet — ignore, user can type manually
-      }
-    }, 800)
+        const cmd = (await window.api.invoke('tmux:getPaneCommand', { name: sessionName })) as string
+        const trimmed = cmd.trim()
 
-    return () => clearTimeout(t)
+        if (!trimmed) {
+          // Session not ready yet, retry
+          setTimeout(poll, 500)
+          return
+        }
+
+        // If it's a shell, launch claude
+        if (/^(zsh|bash|sh|fish|login|-zsh|-bash)$/i.test(trimmed)) {
+          didLaunch.current = true
+          await window.api.invoke('tmux:sendKeys', { name: sessionName, keys: 'claude' })
+          return
+        }
+
+        // If claude/node is already running, just attach (do nothing)
+        didLaunch.current = true
+      } catch {
+        // Session not ready, keep retrying
+        if (!cancelled) setTimeout(poll, 500)
+      }
+    }
+
+    // Start polling after a short delay for session init
+    const t = setTimeout(poll, 800)
+    return () => { cancelled = true; clearTimeout(t) }
   }, [sessionName, type])
 
   return (
     <div
       ref={containerRef}
-      style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
+      style={{
+        flex: 1,
+        overflow: 'hidden',
+        minHeight: 0,
+        background: '#0a0a0b',
+      }}
     />
   )
 }
 
-// ── HorizontalResizeHandle ─────────────────────────────────────────────────────
+// ── SplitResizeHandle ─────────────────────────────────────────────────────────
 
-interface HorizontalResizeHandleProps {
+function SplitResizeHandle({
+  direction,
+  onResizeStart,
+}: {
+  direction: 'horizontal' | 'vertical'
   onResizeStart: (e: React.MouseEvent) => void
-}
-
-function HorizontalResizeHandle({ onResizeStart }: HorizontalResizeHandleProps): JSX.Element {
+}): JSX.Element {
   const [hovered, setHovered] = useState(false)
+  const isH = direction === 'horizontal'
 
   return (
     <div
@@ -72,10 +232,10 @@ function HorizontalResizeHandle({ onResizeStart }: HorizontalResizeHandleProps):
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        width: 4,
+        [isH ? 'width' : 'height']: 4,
         flexShrink: 0,
         background: hovered ? 'var(--accent)' : 'var(--border)',
-        cursor: 'col-resize',
+        cursor: isH ? 'col-resize' : 'row-resize',
         transition: 'background .15s',
         zIndex: 10,
       }}
@@ -83,85 +243,253 @@ function HorizontalResizeHandle({ onResizeStart }: HorizontalResizeHandleProps):
   )
 }
 
-// ── VerticalResizeHandle ───────────────────────────────────────────────────────
+// ── DropZoneOverlay ──────────────────────────────────────────────────────────
 
-interface VerticalResizeHandleProps {
-  onResizeStart: (e: React.MouseEvent) => void
-}
+function DropZoneOverlay({
+  onDrop,
+}: {
+  onDrop: (zone: DropZone) => void
+}): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [zone, setZone] = useState<DropZone>('center')
 
-function VerticalResizeHandle({ onResizeStart }: VerticalResizeHandleProps): JSX.Element {
-  const [hovered, setHovered] = useState(false)
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = ref.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top) / rect.height
+
+    let z: DropZone = 'center'
+    if (x < 0.22) z = 'left'
+    else if (x > 0.78) z = 'right'
+    else if (y < 0.22) z = 'top'
+    else if (y > 0.78) z = 'bottom'
+    setZone(z)
+  }, [])
+
+  const zoneStyle = (z: DropZone): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      position: 'absolute',
+      background: 'rgba(124, 106, 247, 0.12)',
+      border: '2px solid var(--accent)',
+      borderRadius: 4,
+      transition: 'all .1s',
+      pointerEvents: 'none',
+    }
+    switch (z) {
+      case 'left':
+        return { ...base, left: 0, top: 0, bottom: 0, width: '50%' }
+      case 'right':
+        return { ...base, right: 0, top: 0, bottom: 0, width: '50%' }
+      case 'top':
+        return { ...base, left: 0, top: 0, right: 0, height: '50%' }
+      case 'bottom':
+        return { ...base, left: 0, bottom: 0, right: 0, height: '50%' }
+      case 'center':
+        return { ...base, left: '10%', top: '10%', right: '10%', bottom: '10%' }
+    }
+  }
 
   return (
     <div
-      onMouseDown={onResizeStart}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        height: 4,
-        flexShrink: 0,
-        background: hovered ? 'var(--accent)' : 'var(--border)',
-        cursor: 'row-resize',
-        transition: 'background .15s',
-        zIndex: 10,
+      ref={ref}
+      onDragOver={handleDragOver}
+      onDrop={(e) => {
+        e.preventDefault()
+        onDrop(zone)
       }}
-    />
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 15,
+      }}
+    >
+      <div style={zoneStyle(zone)} />
+    </div>
   )
 }
 
-// ── WorkspaceView ──────────────────────────────────────────────────────────────
+// ── PaneRenderer (recursive) ──────────────────────────────────────────────────
 
-interface WorkspaceViewProps {
+interface PaneRendererProps {
+  node: PaneNode
   worktreePath: string
+  focusedId: string | null
+  draggingId: string | null
+  onFocus: (id: string) => void
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+  onDrop: (targetId: string, zone: DropZone) => void
+  onRatioChange: (splitId: string, ratio: number) => void
+  onClose: (id: string) => void
+  canClose: boolean
 }
 
-export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element {
-  const worktreeBase = (worktreePath.split('/').pop() ?? 'workspace').replace(/[^a-zA-Z0-9-]/g, '-')
+function PaneRenderer(props: PaneRendererProps): JSX.Element {
+  if (props.node.type === 'leaf') return <LeafPane {...props} node={props.node} />
+  return <SplitPane {...props} node={props.node} />
+}
 
-  const makeSessionName = useCallback(
-    (panelId: string) => `codrox-${worktreeBase}-${panelId}`,
-    [worktreeBase]
+// ── LeafPane ──
+
+function LeafPane({
+  node,
+  worktreePath,
+  focusedId,
+  draggingId,
+  onFocus,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  onClose,
+  canClose,
+}: Omit<PaneRendererProps, 'node'> & { node: PaneLeaf }): JSX.Element {
+  const isFocused = focusedId === node.id
+  const isDragging = draggingId === node.id
+  const showDropZone = draggingId !== null && draggingId !== node.id
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative',
+        opacity: isDragging ? 0.4 : 1,
+        minWidth: 0,
+        minHeight: 0,
+        background: 'var(--bg)',
+      }}
+      onMouseDown={() => onFocus(node.id)}
+    >
+      {isFocused && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            border: '1px solid var(--accent)',
+            borderRadius: 1,
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}
+        />
+      )}
+
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', node.id)
+          onDragStart(node.id)
+        }}
+        onDragEnd={onDragEnd}
+        style={{
+          height: 28,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 8px',
+          background: isFocused ? 'var(--surface2)' : 'var(--surface)',
+          borderBottom: isFocused
+            ? '2px solid var(--accent)'
+            : '1px solid var(--border)',
+          cursor: 'grab',
+          userSelect: 'none',
+          overflow: 'hidden',
+          zIndex: 6,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontFamily: 'var(--mono)',
+            fontWeight: 600,
+            color: node.panelType === 'claude' ? 'var(--accent2)' : 'var(--green)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {node.title}
+        </span>
+        {canClose && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose(node.id)
+            }}
+            title="Close panel"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text3)',
+              cursor: 'pointer',
+              fontSize: 14,
+              padding: '0 2px',
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      <PanelTerminal
+        sessionName={node.sessionName}
+        worktreePath={worktreePath}
+        type={node.panelType}
+      />
+
+      {showDropZone && (
+        <DropZoneOverlay onDrop={(z) => onDrop(node.id, z)} />
+      )}
+    </div>
   )
+}
 
-  // Top panels (Claude + additional panels added via + buttons)
-  const [topPanels, setTopPanels] = useState<Panel[]>(() => [
-    {
-      id: 'claude-main',
-      type: 'claude',
-      title: 'Claude',
-      widthPercent: 100,
-      collapsed: false,
-      sessionName: `codrox-${worktreeBase}-claude-main`,
-    },
-  ])
+// ── SplitPane ──
 
-  // Bottom terminal (always present, can collapse)
-  const [bottomTerminal, setBottomTerminal] = useState<BottomTerminal>(() => ({
-    sessionName: `codrox-${worktreeBase}-terminal-main`,
-    collapsed: false,
-  }))
+function SplitPane({
+  node,
+  worktreePath,
+  focusedId,
+  draggingId,
+  onFocus,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  onRatioChange,
+  onClose,
+  canClose,
+}: Omit<PaneRendererProps, 'node'> & { node: PaneSplit }): JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isH = node.direction === 'horizontal'
 
-  // Top/bottom split as percentage for the top section (default 75%)
-  const [topBottomSplit, setTopBottomSplit] = useState(75)
-
-  const outerRef = useRef<HTMLDivElement>(null)
-  const topPanelsRef = useRef<HTMLDivElement>(null)
-
-  // ── Top/Bottom resize logic ──────────────────────────────────────────────────
-
-  const handleVerticalResizeStart = useCallback(
-    (e: React.MouseEvent): void => {
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
       e.preventDefault()
-      const startY = e.clientY
-      const container = outerRef.current
+      const container = containerRef.current
       if (!container) return
 
-      const containerHeight = container.getBoundingClientRect().height
+      const rect = container.getBoundingClientRect()
+      const totalSize = isH ? rect.width : rect.height
+      const startOffset = isH ? rect.left : rect.top
 
       const onMouseMove = (me: MouseEvent): void => {
-        const delta = me.clientY - startY
-        const deltaPercent = (delta / containerHeight) * 100
-        setTopBottomSplit((prev) => Math.max(30, Math.min(85, prev + deltaPercent)))
+        const pos = isH ? me.clientX : me.clientY
+        const newRatio = (pos - startOffset) / totalSize
+        onRatioChange(node.id, newRatio)
       }
 
       const onMouseUp = (): void => {
@@ -173,392 +501,468 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
 
       document.addEventListener('mousemove', onMouseMove)
       document.addEventListener('mouseup', onMouseUp)
-      document.body.style.cursor = 'row-resize'
+      document.body.style.cursor = isH ? 'col-resize' : 'row-resize'
       document.body.style.userSelect = 'none'
     },
-    []
+    [node.id, isH, onRatioChange],
   )
 
-  // ── Horizontal resize between top panels ─────────────────────────────────────
+  const childProps = {
+    worktreePath,
+    focusedId,
+    draggingId,
+    onFocus,
+    onDragStart,
+    onDragEnd,
+    onDrop,
+    onRatioChange,
+    onClose,
+    canClose,
+  }
 
-  const handleHorizontalResizeStart = useCallback(
-    (leftPanelId: string, rightPanelId: string) =>
-      (e: React.MouseEvent): void => {
-        e.preventDefault()
-        const startX = e.clientX
-        const container = topPanelsRef.current
-        if (!container) return
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: isH ? 'row' : 'column',
+        overflow: 'hidden',
+        minWidth: 0,
+        minHeight: 0,
+      }}
+    >
+      <div
+        style={{
+          [isH ? 'width' : 'height']: `${node.ratio * 100}%`,
+          display: 'flex',
+          overflow: 'hidden',
+          minWidth: 0,
+          minHeight: 0,
+        }}
+      >
+        <PaneRenderer node={node.first} {...childProps} />
+      </div>
 
-        const containerWidth = container.getBoundingClientRect().width
+      <SplitResizeHandle
+        direction={isH ? 'horizontal' : 'vertical'}
+        onResizeStart={handleResizeStart}
+      />
 
-        const onMouseMove = (me: MouseEvent): void => {
-          const delta = me.clientX - startX
-          const deltaPercent = (delta / containerWidth) * 100
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+          minWidth: 0,
+          minHeight: 0,
+        }}
+      >
+        <PaneRenderer node={node.second} {...childProps} />
+      </div>
+    </div>
+  )
+}
 
-          setTopPanels((prev) => {
-            const leftIdx = prev.findIndex((p) => p.id === leftPanelId)
-            const rightIdx = prev.findIndex((p) => p.id === rightPanelId)
-            if (leftIdx === -1 || rightIdx === -1) return prev
+// ── WorkspaceView ──────────────────────────────────────────────────────────────
 
-            const left = prev[leftIdx]
-            const right = prev[rightIdx]
-            const combined = left.widthPercent + right.widthPercent
-            const newLeft = Math.max(5, Math.min(combined - 5, left.widthPercent + deltaPercent))
-            const newRight = combined - newLeft
+interface WorkspaceViewProps {
+  worktreePath: string
+}
 
-            const next = [...prev]
-            next[leftIdx] = { ...left, widthPercent: newLeft }
-            next[rightIdx] = { ...right, widthPercent: newRight }
-            return next
-          })
-        }
+export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element {
+  const worktreeBase = (worktreePath.split('/').pop() ?? 'workspace').replace(
+    /[^a-zA-Z0-9-]/g,
+    '-',
+  )
+  const worktreeName = worktreePath.split('/').pop() ?? 'workspace'
 
-        const onMouseUp = (): void => {
-          document.removeEventListener('mousemove', onMouseMove)
-          document.removeEventListener('mouseup', onMouseUp)
-          document.body.style.cursor = ''
-          document.body.style.userSelect = ''
-        }
-
-        document.addEventListener('mousemove', onMouseMove)
-        document.addEventListener('mouseup', onMouseUp)
-        document.body.style.cursor = 'col-resize'
-        document.body.style.userSelect = 'none'
-      },
-    []
+  const makeSessionName = useCallback(
+    (panelId: string) => `codrox-${worktreeBase}-${panelId}`,
+    [worktreeBase],
   )
 
-  // ── Collapse toggle for top panels ───────────────────────────────────────────
+  // ── Pane tree state ──
+  const [paneTree, setPaneTree] = useState<PaneNode>(() => ({
+    type: 'leaf',
+    id: 'claude-main',
+    panelType: 'claude',
+    title: 'Claude',
+    sessionName: `codrox-${worktreeBase}-claude-main`,
+  }))
 
-  const toggleTopPanelCollapse = useCallback((id: string): void => {
-    setTopPanels((prev) => {
-      const idx = prev.findIndex((p) => p.id === id)
-      if (idx === -1) return prev
+  // ── Focus tracking ──
+  const [focusedPaneId, setFocusedPaneId] = useState<string | null>('claude-main')
 
-      const panel = prev[idx]
-      const willCollapse = !panel.collapsed
+  // ── Drag state ──
+  const [draggingPaneId, setDraggingPaneId] = useState<string | null>(null)
 
-      if (willCollapse) {
-        const otherVisible = prev.filter((p, i) => i !== idx && !p.collapsed)
-        if (otherVisible.length === 0) return prev
-        const share = panel.widthPercent / otherVisible.length
-        return prev.map((p, i) => {
-          if (i === idx) return { ...p, collapsed: true, widthPercent: 0 }
-          if (!p.collapsed) return { ...p, widthPercent: p.widthPercent + share }
-          return p
-        })
-      } else {
-        const restorePercent = 25
-        const visible = prev.filter((p, i) => i !== idx && !p.collapsed)
-        if (visible.length === 0) return prev
-        const shrinkPer = restorePercent / visible.length
-        return prev.map((p, i) => {
-          if (i === idx) return { ...p, collapsed: false, widthPercent: restorePercent }
-          if (!p.collapsed) return { ...p, widthPercent: Math.max(5, p.widthPercent - shrinkPer) }
-          return p
-        })
+  // ── Bottom terminal ──
+  const [bottomTerminal, setBottomTerminal] = useState<BottomTerminal>(() => ({
+    sessionName: `codrox-${worktreeBase}-terminal-main`,
+    collapsed: false,
+  }))
+
+  // ── Top/bottom split ──
+  const [topBottomSplit, setTopBottomSplit] = useState(75)
+  const outerRef = useRef<HTMLDivElement>(null)
+
+  // ── Add panel (splits alongside the focused pane) ──
+  const addPanel = useCallback(
+    (type: 'claude' | 'terminal') => {
+      const id = `${type}-${Date.now()}`
+      const newLeaf: PaneLeaf = {
+        type: 'leaf',
+        id,
+        panelType: type,
+        title: type === 'claude' ? 'Claude' : 'Terminal',
+        sessionName: makeSessionName(id),
       }
-    })
+
+      setPaneTree((prev) => {
+        const targetId = focusedPaneId && findLeafById(prev, focusedPaneId)
+          ? focusedPaneId
+          : findFirstLeafId(prev)
+        return insertAtPane(prev, targetId, newLeaf, 'right')
+      })
+      setFocusedPaneId(id)
+    },
+    [makeSessionName, focusedPaneId],
+  )
+
+  // ── Close panel ──
+  const closePanel = useCallback(
+    (id: string) => {
+      setPaneTree((prev) => {
+        if (countLeaves(prev) <= 1) return prev // keep at least one
+        const result = removePane(prev, id)
+        return result ?? prev
+      })
+      if (focusedPaneId === id) setFocusedPaneId(null)
+    },
+    [focusedPaneId],
+  )
+
+  // ── Drop handler (VS Code style) ──
+  const handleDrop = useCallback(
+    (targetId: string, zone: DropZone) => {
+      if (!draggingPaneId || draggingPaneId === targetId) return
+
+      setPaneTree((prev) => {
+        const draggedLeaf = findLeafById(prev, draggingPaneId)
+        if (!draggedLeaf) return prev
+
+        // Remove the dragged pane
+        let tree = removePane(prev, draggingPaneId)
+        if (!tree) return prev
+
+        // Center → insert right
+        const effectiveZone = zone === 'center' ? 'right' : zone
+
+        // Insert at target position with the chosen zone
+        tree = insertAtPane(tree, targetId, { ...draggedLeaf }, effectiveZone)
+        return tree
+      })
+
+      setDraggingPaneId(null)
+    },
+    [draggingPaneId],
+  )
+
+  // ── Ratio change ──
+  const handleRatioChange = useCallback((splitId: string, ratio: number) => {
+    setPaneTree((prev) => updateRatio(prev, splitId, ratio))
   }, [])
 
-  // ── Toggle bottom terminal collapse ──────────────────────────────────────────
+  // ── Top/Bottom vertical resize ──
+  const handleVerticalResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const container = outerRef.current
+    if (!container) return
+    const containerHeight = container.getBoundingClientRect().height
+    const startSplit = topBottomSplit
 
-  const toggleBottomCollapse = useCallback((): void => {
+    const onMouseMove = (me: MouseEvent): void => {
+      const currentY = me.clientY
+      const offset = currentY - container.getBoundingClientRect().top
+      const newPct = (offset / containerHeight) * 100
+      setTopBottomSplit(Math.max(30, Math.min(85, newPct)))
+    }
+
+    const onMouseUp = (): void => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+    void startSplit
+  }, [topBottomSplit])
+
+  // ── Toggle bottom terminal collapse ──
+  const toggleBottomCollapse = useCallback(() => {
     setBottomTerminal((prev) => ({ ...prev, collapsed: !prev.collapsed }))
   }, [])
 
-  // ── Add panel ────────────────────────────────────────────────────────────────
+  const isBottomFocused = focusedPaneId === 'bottom-terminal'
+  const bottomHeightStyle = bottomTerminal.collapsed ? 28 : `${100 - topBottomSplit}%`
+  const leafCount = countLeaves(paneTree)
 
-  const addPanel = useCallback(
-    (type: 'claude' | 'terminal'): void => {
-      const id = `${type}-${Date.now()}`
-      const sessionName = makeSessionName(id)
-      const newPercent = 25
+  // ── File tabs from store ──
+  const openFiles = useFileTreeStore((s) => s.openFiles)
+  const activeTab = useFileTreeStore((s) => s.activeTab)
+  const setActiveTab = useFileTreeStore((s) => s.setActiveTab)
+  const closeFile = useFileTreeStore((s) => s.closeFile)
 
-      setTopPanels((prev) => {
-        const visible = prev.filter((p) => !p.collapsed)
-        const shrinkFactor = (100 - newPercent) / 100
-        const next = prev.map((p) => {
-          if (p.collapsed) return p
-          return { ...p, widthPercent: p.widthPercent * shrinkFactor }
-        })
-        void visible
-        return [
-          ...next,
-          {
-            id,
-            type,
-            title: type === 'claude' ? 'Claude' : 'Terminal',
-            widthPercent: newPercent,
-            collapsed: false,
-            sessionName,
-          },
-        ]
-      })
-    },
-    [makeSessionName]
-  )
-
-  // ── Drag reorder for top panels ───────────────────────────────────────────────
-
-  const draggingPanel = useRef<string | null>(null)
-  const dragOverPanel = useRef<string | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
-
-  const handleDragStart = useCallback((id: string) => (): void => {
-    draggingPanel.current = id
-  }, [])
-
-  const handleDragOver = useCallback(
-    (id: string) =>
-      (e: React.DragEvent): void => {
-        e.preventDefault()
-        if (dragOverPanel.current !== id) {
-          dragOverPanel.current = id
-          setDragOverId(id)
-        }
-      },
-    []
-  )
-
-  const handleDrop = useCallback((targetId: string) => (): void => {
-    const fromId = draggingPanel.current
-    if (!fromId || fromId === targetId) {
-      draggingPanel.current = null
-      dragOverPanel.current = null
-      setDragOverId(null)
-      return
-    }
-
-    setTopPanels((prev) => {
-      const fromIdx = prev.findIndex((p) => p.id === fromId)
-      const toIdx = prev.findIndex((p) => p.id === targetId)
-      if (fromIdx === -1 || toIdx === -1) return prev
-      const next = [...prev]
-      const [removed] = next.splice(fromIdx, 1)
-      next.splice(toIdx, 0, removed)
-      return next
-    })
-
-    draggingPanel.current = null
-    dragOverPanel.current = null
-    setDragOverId(null)
-  }, [])
-
-  const handleDragEnd = useCallback((): void => {
-    draggingPanel.current = null
-    dragOverPanel.current = null
-    setDragOverId(null)
-  }, [])
-
-  // ── Visible panel count ───────────────────────────────────────────────────────
-
-  const visibleTopPanelCount = topPanels.filter((p) => !p.collapsed).length
-
-  // ── Bottom section height ─────────────────────────────────────────────────────
-
-  const bottomHeightStyle = bottomTerminal.collapsed
-    ? 28
-    : `${100 - topBottomSplit}%`
-
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const isWorkTab = activeTab === 'work'
 
   return (
     <div
       ref={outerRef}
-      style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: 'var(--bg)',
+      }}
     >
-      {/* Top section */}
+      {/* ── Worktree header with tabs ── */}
+      <div
+        style={{
+          height: 32,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'stretch',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          userSelect: 'none',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Work tab */}
+        <div
+          onClick={() => setActiveTab('work')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '0 12px',
+            cursor: 'pointer',
+            borderBottom: isWorkTab ? '2px solid var(--accent)' : '2px solid transparent',
+            background: isWorkTab ? 'var(--surface2)' : 'transparent',
+            transition: 'background .1s',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              fontFamily: 'var(--mono)',
+              fontWeight: 600,
+              color: isWorkTab ? 'var(--text)' : 'var(--text3)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {worktreeName}
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              fontFamily: 'var(--mono)',
+              color: 'var(--text3)',
+              flexShrink: 0,
+            }}
+          >
+            {leafCount}
+          </span>
+        </div>
+
+        {/* File & agent tabs */}
+        {openFiles.map((tabKey) => {
+          const isAgent = tabKey.startsWith('agent:')
+          const isAgentOutput = tabKey.startsWith('agent-output:')
+          const displayName = isAgent
+            ? tabKey.slice(6).replace(/^@/, '')
+            : isAgentOutput
+              ? tabKey.slice(13).slice(0, 8) + '…'
+              : tabKey.split('/').pop() ?? tabKey
+          const isActive = activeTab === tabKey
+          const isMd = !isAgent && !isAgentOutput && /\.md$/i.test(displayName)
+          const icon = (isAgent || isAgentOutput) ? '⊛' : isMd ? '¶' : '○'
+          const iconColor = (isAgent || isAgentOutput) ? 'var(--green)' : 'var(--text3)'
+
+          return (
+            <div
+              key={tabKey}
+              onClick={() => setActiveTab(tabKey)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '0 8px',
+                cursor: 'pointer',
+                borderBottom: isActive ? `2px solid ${isAgent ? 'var(--green)' : 'var(--accent)'}` : '2px solid transparent',
+                background: isActive ? 'var(--surface2)' : 'transparent',
+                transition: 'background .1s',
+                maxWidth: 160,
+                overflow: 'hidden',
+              }}
+            >
+              <span style={{ fontSize: 9, color: iconColor, flexShrink: 0 }}>
+                {icon}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontFamily: 'var(--mono)',
+                  fontWeight: 500,
+                  color: isActive ? 'var(--text)' : 'var(--text3)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {displayName}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeFile(tabKey)
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text3)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  padding: '0 1px',
+                  lineHeight: 1,
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+              >
+                ×
+              </button>
+            </div>
+          )
+        })}
+
+        <div style={{ flex: 1 }} />
+
+        {/* + buttons only on work tab */}
+        {isWorkTab && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px' }}>
+              <HeaderButton type="terminal" onClick={() => addPanel('terminal')}>
+                + Terminal
+              </HeaderButton>
+              <HeaderButton type="claude" onClick={() => addPanel('claude')}>
+                + Claude
+              </HeaderButton>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Top section — pane tree OR file preview ── */}
       <div
         style={{
           flex: bottomTerminal.collapsed ? 1 : undefined,
           height: bottomTerminal.collapsed ? undefined : `${topBottomSplit}%`,
           display: 'flex',
-          flexDirection: 'row',
           overflow: 'hidden',
           minHeight: 0,
         }}
       >
-        <div
-          ref={topPanelsRef}
-          style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden', minWidth: 0 }}
-        >
-          {topPanels.map((panel, idx) => {
-            const isCollapsed = panel.collapsed
-            const nextPanel = topPanels[idx + 1]
-            const isLast = idx === topPanels.length - 1
+        {/* Work tab: pane tree */}
+        {isWorkTab && (
+          <PaneRenderer
+            node={paneTree}
+            worktreePath={worktreePath}
+            focusedId={focusedPaneId}
+            draggingId={draggingPaneId}
+            onFocus={setFocusedPaneId}
+            onDragStart={setDraggingPaneId}
+            onDragEnd={() => setDraggingPaneId(null)}
+            onDrop={handleDrop}
+            onRatioChange={handleRatioChange}
+            onClose={closePanel}
+            canClose={leafCount > 1}
+          />
+        )}
 
-            const borderLeft =
-              panel.type === 'claude'
-                ? '3px solid var(--accent)'
-                : '3px solid var(--green)'
+        {/* File preview tab */}
+        {!isWorkTab && !activeTab.startsWith('agent:') && !activeTab.startsWith('agent-output:') && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}>
+            <FileViewer />
+          </div>
+        )}
 
-            return (
-              <div
-                key={panel.id}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  width: isCollapsed ? 32 : `${panel.widthPercent}%`,
-                  minWidth: isCollapsed ? 32 : undefined,
-                  flexShrink: 0,
-                }}
-              >
-                {/* Drop indicator */}
-                {dragOverId === panel.id && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 2,
-                      background: 'var(--accent)',
-                      zIndex: 20,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )}
+        {/* Agent terminal tab — attach to agent's tmux session */}
+        {!isWorkTab && activeTab.startsWith('agent:') && (
+          <AgentTerminal
+            key={activeTab}
+            sessionName={activeTab.slice(6)}
+            worktreePath={worktreePath}
+          />
+        )}
 
-                {/* Panel */}
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    borderLeft,
-                    position: 'relative',
-                  }}
-                  onDragOver={handleDragOver(panel.id)}
-                  onDrop={() => handleDrop(panel.id)()}
-                >
-                  {/* Panel header */}
-                  <div
-                    draggable
-                    onDragStart={handleDragStart(panel.id)}
-                    onDragEnd={handleDragEnd}
-                    style={{
-                      height: 24,
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: isCollapsed ? 'center' : 'space-between',
-                      padding: isCollapsed ? 0 : '0 6px',
-                      background: 'var(--surface)',
-                      borderBottom: '1px solid var(--border)',
-                      cursor: 'grab',
-                      userSelect: 'none',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {isCollapsed ? (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 4,
-                          width: '100%',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <button
-                          onClick={() => toggleTopPanelCollapse(panel.id)}
-                          title="Expand panel"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text3)',
-                            cursor: 'pointer',
-                            fontSize: 9,
-                            padding: 0,
-                            lineHeight: 1,
-                          }}
-                        >
-                          ▸
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontFamily: 'var(--mono)',
-                            fontWeight: 600,
-                            color: panel.type === 'claude' ? 'var(--accent2)' : 'var(--green)',
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flexShrink: 1,
-                          }}
-                        >
-                          {panel.title}
-                        </span>
-                        <button
-                          onClick={() => toggleTopPanelCollapse(panel.id)}
-                          title="Collapse panel"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--text3)',
-                            cursor: 'pointer',
-                            fontSize: 10,
-                            padding: '0 2px',
-                            lineHeight: 1,
-                            flexShrink: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-                        >
-                          ▾
-                        </button>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Terminal content — hidden when collapsed */}
-                  {!isCollapsed && (
-                    <PanelTerminal
-                      sessionName={panel.sessionName}
-                      worktreePath={worktreePath}
-                      type={panel.type}
-                    />
-                  )}
-                </div>
-
-                {/* Horizontal resize handle between top panels */}
-                {!isLast && nextPanel && (
-                  <HorizontalResizeHandle
-                    onResizeStart={handleHorizontalResizeStart(panel.id, nextPanel.id)}
-                  />
-                )}
-              </div>
-            )
-          })}
-        </div>
+        {/* Agent output viewer — renders JSONL conversation */}
+        {!isWorkTab && activeTab.startsWith('agent-output:') && (
+          <AgentOutputViewer
+            key={activeTab}
+            agentId={activeTab.slice(13)}
+          />
+        )}
       </div>
 
-      {/* Vertical drag handle between top and bottom */}
+      {/* ── Vertical resize handle ── */}
       {!bottomTerminal.collapsed && (
-        <VerticalResizeHandle onResizeStart={handleVerticalResizeStart} />
+        <SplitResizeHandle
+          direction="vertical"
+          onResizeStart={handleVerticalResizeStart}
+        />
       )}
 
-      {/* Bottom terminal section */}
+      {/* ── Bottom terminal section ── */}
       <div
+        onMouseDown={() => setFocusedPaneId('bottom-terminal')}
         style={{
           height: bottomHeightStyle,
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          borderTop: bottomTerminal.collapsed ? '1px solid var(--border)' : undefined,
+          position: 'relative',
+          borderTop: bottomTerminal.collapsed
+            ? '1px solid var(--border)'
+            : undefined,
         }}
       >
+        {/* Focus ring for bottom terminal */}
+        {isBottomFocused && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              border: '1px solid var(--accent)',
+              borderRadius: 1,
+              pointerEvents: 'none',
+              zIndex: 5,
+            }}
+          />
+        )}
+
         {/* Bottom terminal header */}
         <div
           style={{
@@ -568,8 +972,10 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 8px',
-            background: 'var(--surface)',
-            borderBottom: '1px solid var(--border)',
+            background: isBottomFocused ? 'var(--surface2)' : 'var(--surface)',
+            borderBottom: isBottomFocused
+              ? '2px solid var(--accent)'
+              : '1px solid var(--border)',
             borderTop: '1px solid var(--border)',
             userSelect: 'none',
           }}
@@ -588,7 +994,9 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           </span>
           <button
             onClick={toggleBottomCollapse}
-            title={bottomTerminal.collapsed ? 'Expand terminal' : 'Collapse terminal'}
+            title={
+              bottomTerminal.collapsed ? 'Expand terminal' : 'Collapse terminal'
+            }
             style={{
               background: 'none',
               border: 'none',
@@ -600,8 +1008,12 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
               display: 'flex',
               alignItems: 'center',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--text)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text3)'
+            }}
           >
             {bottomTerminal.collapsed ? '▸' : '▾'}
           </button>
@@ -616,59 +1028,23 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           />
         )}
       </div>
-
-      {/* Footer bar */}
-      <div
-        style={{
-          height: 28,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 8px',
-          gap: 6,
-          background: 'var(--surface)',
-          borderTop: '1px solid var(--border)',
-        }}
-      >
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* + Terminal */}
-        <FooterButton type="terminal" onClick={() => addPanel('terminal')}>
-          + Terminal
-        </FooterButton>
-
-        {/* + Claude */}
-        <FooterButton type="claude" onClick={() => addPanel('claude')}>
-          + Claude
-        </FooterButton>
-
-        {/* Panel count */}
-        <span
-          style={{
-            fontSize: 10,
-            fontFamily: 'var(--mono)',
-            color: 'var(--text3)',
-            flexShrink: 0,
-            marginLeft: 4,
-          }}
-        >
-          {visibleTopPanelCount} panel{visibleTopPanelCount !== 1 ? 's' : ''}
-        </span>
-      </div>
     </div>
   )
 }
 
-// ── FooterButton ───────────────────────────────────────────────────────────────
+// ── HeaderButton ──────────────────────────────────────────────────────────────
 
-interface FooterButtonProps {
+interface HeaderButtonProps {
   type: 'claude' | 'terminal'
   onClick: () => void
   children: React.ReactNode
 }
 
-function FooterButton({ type, onClick, children }: FooterButtonProps): JSX.Element {
+function HeaderButton({
+  type,
+  onClick,
+  children,
+}: HeaderButtonProps): JSX.Element {
   const isAccent = type === 'claude'
 
   return (
@@ -692,12 +1068,18 @@ function FooterButton({ type, onClick, children }: FooterButtonProps): JSX.Eleme
         border: isAccent ? '1px solid var(--accent)' : '1px solid var(--green)',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = isAccent ? 'var(--accent)' : 'var(--green)'
+        e.currentTarget.style.background = isAccent
+          ? 'var(--accent)'
+          : 'var(--green)'
         e.currentTarget.style.color = isAccent ? '#fff' : '#000'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = isAccent ? 'var(--accent-dim)' : 'var(--green-dim)'
-        e.currentTarget.style.color = isAccent ? 'var(--accent2)' : 'var(--green)'
+        e.currentTarget.style.background = isAccent
+          ? 'var(--accent-dim)'
+          : 'var(--green-dim)'
+        e.currentTarget.style.color = isAccent
+          ? 'var(--accent2)'
+          : 'var(--green)'
       }}
     >
       {children}

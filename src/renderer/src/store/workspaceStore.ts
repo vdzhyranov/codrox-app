@@ -29,7 +29,7 @@ interface WorkspaceActions {
   // Create a new git worktree
   createWorktree: (workspaceId: string, workspacePath: string, branch: string, name: string) => Promise<Worktree>
   // Remove a worktree
-  removeWorktree: (workspaceId: string, worktreePath: string) => Promise<void>
+  removeWorktree: (workspaceId: string, workspacePath: string, worktreePath: string) => Promise<void>
 
   // Lifecycle actions
   setWorktreeMode: (worktreePath: string, mode: WorktreeMode) => void
@@ -137,8 +137,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     return wt
   },
 
-  removeWorktree: async (workspaceId: string, worktreePath: string) => {
-    await window.api.invoke('worktree:remove', { workspaceId, worktreePath })
+  removeWorktree: async (workspaceId: string, workspacePath: string, worktreePath: string) => {
+    await window.api.invoke('worktree:remove', { workspaceId, workspacePath, worktreePath })
     set((state) => {
       const existing = state.worktreesByWorkspace[workspaceId] ?? []
       return {

@@ -5,7 +5,6 @@ import { promisify } from 'util'
 import { persistenceService } from '../services/PersistenceService'
 import { workspaceSetup } from '../services/WorkspaceSetup'
 import type { Worktree, SessionData } from '@shared/types'
-import { randomUUID } from 'crypto'
 
 const execFileAsync = promisify(execFile)
 
@@ -62,13 +61,13 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       payload: { workspaceId: string; workspacePath: string; branch: string; name: string }
     ) => {
       const { workspaceId, workspacePath, branch, name } = payload
-      const id = randomUUID()
       const worktreePath = join(workspacePath, '..', `${basename(workspacePath)}-${branch}`)
       await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
         cwd: workspacePath
       })
+      // Use path as ID — consistent with worktree:list
       const worktree: Worktree = {
-        id,
+        id: worktreePath,
         workspaceId,
         path: worktreePath,
         branch,
@@ -116,12 +115,20 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   // Remove a worktree
   ipcMain.handle(
     'worktree:remove',
-    async (_event, payload: { workspaceId: string; worktreePath: string }) => {
+    async (_event, payload: { workspaceId: string; workspacePath: string; worktreePath: string }) => {
+      const opts = { cwd: payload.workspacePath }
       try {
-        await execFileAsync('git', ['worktree', 'remove', payload.worktreePath])
+        await execFileAsync('git', ['worktree', 'remove', '--force', payload.worktreePath], opts)
+        await execFileAsync('git', ['worktree', 'prune'], opts).catch(() => {})
         return { success: true }
       } catch {
-        return { success: false }
+        try {
+          await execFileAsync('git', ['worktree', 'remove', '--force', '--force', payload.worktreePath], opts)
+          await execFileAsync('git', ['worktree', 'prune'], opts).catch(() => {})
+          return { success: true }
+        } catch {
+          return { success: false }
+        }
       }
     }
   )

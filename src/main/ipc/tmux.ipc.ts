@@ -4,6 +4,10 @@ import { tmuxManager } from '../services/TmuxManager'
 export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
   ipcMain.handle('tmux:isInstalled', () => tmuxManager.isInstalled())
 
+  ipcMain.handle('tmux:getPaneCommand', (_event, payload: { name: string }) =>
+    tmuxManager.getPaneCommand(payload.name)
+  )
+
   ipcMain.handle('tmux:createSession', (_event, payload: { name: string; cwd: string }) => {
     console.log('[Tmux] createSession:', payload.name, payload.cwd)
     return tmuxManager.createSession(payload.name, payload.cwd)
@@ -36,6 +40,10 @@ export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
     'tmux:sendKeys',
     (_event, payload: { name: string; keys: string; paneIndex?: number }) =>
       tmuxManager.sendKeys(payload.name, payload.keys, payload.paneIndex)
+  )
+
+  ipcMain.handle('tmux:listAllPanes', () =>
+    tmuxManager.listAllPanes()
   )
 
   ipcMain.handle('tmux:listPanes', (_event, payload: { name: string }) =>

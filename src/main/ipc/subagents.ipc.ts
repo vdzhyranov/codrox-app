@@ -2,6 +2,10 @@ import { IpcMain, BrowserWindow } from 'electron'
 import { subAgentWatcher } from '../services/SubAgentWatcher'
 
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
+  ipcMain.handle('agents:list', (_event, payload: { workspacePath: string }) => {
+    return subAgentWatcher.listAgents(payload.workspacePath)
+  })
+
   ipcMain.handle('subagents:watch', (_event, payload: { workspacePath: string }) => {
     subAgentWatcher.start(payload.workspacePath, (newAgent) => {
       if (!mainWindow.isDestroyed()) {

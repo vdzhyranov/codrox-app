@@ -33,6 +33,10 @@ export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
     return gitService.commit(payload.worktreePath, payload.message)
   })
 
+  ipcMain.handle('git:renameBranch', async (_event, payload: { worktreePath: string; oldName: string; newName: string }) => {
+    await gitService.renameBranch(payload.worktreePath, payload.oldName, payload.newName)
+  })
+
   ipcMain.handle('git:push', async (_event, payload: { worktreePath: string }) => {
     await gitService.push(payload.worktreePath)
     return { success: true }

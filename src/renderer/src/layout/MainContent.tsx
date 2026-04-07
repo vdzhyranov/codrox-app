@@ -201,7 +201,7 @@ export function MainContent(): JSX.Element {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
       <TmuxInstallCheck>
-        <WorkspaceView worktreePath={activeWorktreePath} />
+        <WorkspaceView key={activeWorktreePath} worktreePath={activeWorktreePath} />
       </TmuxInstallCheck>
     </div>
   )

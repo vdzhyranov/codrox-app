@@ -1,8 +1,7 @@
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useEffect, useState, useRef } from 'react'
-import { useTabStore } from '@renderer/store/tabStore'
+import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import type { GitFileStatus } from '@shared/types/git'
-import type { EditorTab } from '@shared/types/tabs'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   modified:  { label: 'M', color: 'var(--amber)', bg: 'var(--amber-dim)', border: 'rgba(245,158,11,.25)' },
@@ -201,7 +200,7 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
 
 export function GitChanges(): JSX.Element {
   const activeWorktreePath = useActiveWorktreePath()
-  const openTab = useTabStore((s) => s.openTab)
+  const openFile = useFileTreeStore((s) => s.openFile)
   const [changes, setChanges] = useState<GitFileStatus[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -300,15 +299,7 @@ export function GitChanges(): JSX.Element {
     if (!activeWorktreePath) return
     setSelectedPath(file.path)
     const fullPath = `${activeWorktreePath}/${file.path}`
-    const tab: EditorTab = {
-      id: `editor-${fullPath}`,
-      type: 'editor',
-      title: file.path.split('/').pop() || file.path,
-      worktreeId: activeWorktreePath,
-      filePath: fullPath,
-      isDirty: false,
-    }
-    openTab(activeWorktreePath, tab)
+    openFile(fullPath)
   }
 
   const btnBase: React.CSSProperties = {

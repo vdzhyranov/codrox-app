@@ -1,9 +1,17 @@
-import { existsSync, readdirSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 
 export interface SubAgentInfo {
   id: string
   task: string
+}
+
+export interface AgentListEntry {
+  id: string
+  task: string
+  status: 'running' | 'completed'
+  startedAt: number
+  fileSize: number
 }
 
 class SubAgentWatcher {
@@ -77,6 +85,70 @@ class SubAgentWatcher {
     this.knownAgents.clear()
   }
 
+  listAgents(workspacePath: string): AgentListEntry[] {
+    const projectKey = workspacePath.replace(/\//g, '-')
+    const baseDir = `/private/tmp/claude-501/${projectKey}`
+    const agents: AgentListEntry[] = []
+
+    // Scan ALL session dirs, not just most recent
+    if (!existsSync(baseDir)) return agents
+
+    let sessionDirs: string[]
+    try {
+      sessionDirs = readdirSync(baseDir)
+        .map((d) => join(baseDir, d))
+        .filter((d) => { try { return statSync(d).isDirectory() } catch { return false } })
+    } catch {
+      return agents
+    }
+
+    const now = Date.now()
+    const ONE_HOUR = 60 * 60 * 1000
+
+    for (const sessionDir of sessionDirs) {
+      const tasksDir = join(sessionDir, 'tasks')
+      if (!existsSync(tasksDir)) continue
+
+      let entries: string[]
+      try {
+        entries = readdirSync(tasksDir)
+      } catch {
+        continue
+      }
+
+      for (const entry of entries) {
+        if (!entry.endsWith('.output')) continue
+        const filePath = join(tasksDir, entry)
+        const agentId = entry.replace(/\.output$/, '')
+
+        try {
+          const stat = statSync(filePath)
+          const age = now - stat.mtimeMs
+          // Only show agents from the last hour
+          if (age > ONE_HOUR) continue
+
+          const task = this.extractTask(filePath)
+          // If file was modified in the last 30 seconds, consider it running
+          const isRunning = age < 30000 && stat.size > 0
+
+          agents.push({
+            id: agentId,
+            task,
+            status: isRunning ? 'running' : 'completed',
+            startedAt: stat.birthtimeMs || stat.ctimeMs,
+            fileSize: stat.size,
+          })
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // Sort by most recently started first
+    agents.sort((a, b) => b.startedAt - a.startedAt)
+    return agents
+  }
+
   private findMostRecentSessionDir(baseDir: string): string | null {
     if (!existsSync(baseDir)) return null
 
@@ -94,7 +166,6 @@ class SubAgentWatcher {
     for (const entry of entries) {
       const fullPath = join(baseDir, entry)
       try {
-        const { statSync } = require('fs') as typeof import('fs')
         const stat = statSync(fullPath)
         if (stat.isDirectory() && stat.mtimeMs > mostRecentMtime) {
           mostRecentMtime = stat.mtimeMs
