@@ -168,18 +168,21 @@ function PhaseTerminal({
 
       const { Terminal } = await import('@xterm/xterm')
       const { FitAddon } = await import('@xterm/addon-fit')
+      const { Unicode11Addon } = await import('@xterm/addon-unicode11')
+      const { WebLinksAddon } = await import('@xterm/addon-web-links')
       await import('@xterm/xterm/css/xterm.css')
 
       if (cancelled) return
 
       const term = new Terminal({
+        allowProposedApi: true,
         cursorBlink: true,
         fontSize: 13,
         fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
         theme: {
           background: '#18181b',
-          foreground: '#f4f4f5',
-          cursor: '#f4f4f5',
+          foreground: '#f8f8fc',
+          cursor: '#f8f8fc',
           selectionBackground: '#3f3f46',
           black: '#18181b',
           red: '#ef4444',
@@ -193,9 +196,37 @@ function PhaseTerminal({
       })
 
       const fitAddon = new FitAddon()
+      const unicode11 = new Unicode11Addon()
+      const webLinks = new WebLinksAddon()
       term.loadAddon(fitAddon)
+      term.loadAddon(unicode11)
+      term.loadAddon(webLinks)
+      term.unicode.activeVersion = '11'
       term.open(container)
       fitAddon.fit()
+
+      // Copy on select: auto-copy to clipboard when text is selected with mouse
+      term.onSelectionChange(() => {
+        const sel = term.getSelection()
+        if (sel) window.api.clipboardWriteText(sel)
+      })
+
+      // Clipboard: Cmd+C to copy selection, Cmd+V to paste
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type === 'keydown' && e.metaKey) {
+          if (e.key === 'c') {
+            const sel = term.getSelection()
+            if (sel) window.api.clipboardWriteText(sel)
+            return false
+          }
+          if (e.key === 'v') {
+            const text = window.api.clipboardReadText()
+            if (text) window.api.invoke('pty:write', { id, data: text })
+            return false
+          }
+        }
+        return true
+      })
 
       window.api.invoke('pty:create', { id, worktreeId: worktreePath, cwd: worktreePath, type })
 

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, clipboard } from 'electron'
 
 const api = {
   invoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -17,6 +17,14 @@ const api = {
 
   send(channel: string, ...args: unknown[]): void {
     ipcRenderer.send(channel, ...args)
+  },
+
+  clipboardWriteText(text: string): void {
+    clipboard.writeText(text)
+  },
+
+  clipboardReadText(): string {
+    return clipboard.readText()
   }
 }
 

@@ -1,5 +1,5 @@
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
-import { useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import type { FileTreeNode } from '@shared/types/filesystem'
 
@@ -20,7 +20,7 @@ function getFileIcon(name: string): { icon: string; color: string } {
     case 'tsx':  return { icon: '⊤', color: '#61dafb' }
     case 'js':   return { icon: '⟁', color: '#f7df1e' }
     case 'jsx':  return { icon: '⟁', color: '#61dafb' }
-    case 'json': return { icon: '{ }', color: '#a8cc6c' }
+    case 'json': return { icon: '◩', color: '#a8cc6c' }
     case 'css':  return { icon: '#', color: '#42a5f5' }
     case 'scss': return { icon: '#', color: '#f06292' }
     case 'less': return { icon: '#', color: '#f06292' }
@@ -199,6 +199,210 @@ function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }): JSX.E
   )
 }
 
+interface SearchResult {
+  name: string
+  path: string
+  relativePath: string
+}
+
+interface ContentResult {
+  name: string
+  path: string
+  relativePath: string
+  line: number
+  lineContent: string
+}
+
+type SearchMode = 'files' | 'content'
+
+function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
+  const [query, setQuery] = useState('')
+  const [mode, setMode] = useState<SearchMode>('files')
+  const [fileResults, setFileResults] = useState<SearchResult[]>([])
+  const [contentResults, setContentResults] = useState<ContentResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const openFile = useFileTreeStore((s) => s.openFile)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const doSearch = useCallback((q: string, m: SearchMode) => {
+    if (!q.trim()) {
+      setFileResults([])
+      setContentResults([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    if (m === 'files') {
+      window.api.invoke('fs:search', { rootPath, query: q.trim(), limit: 30 })
+        .then((res) => {
+          setFileResults(res as SearchResult[])
+          setSearching(false)
+        })
+        .catch(() => { setFileResults([]); setSearching(false) })
+    } else {
+      window.api.invoke('fs:searchContent', { rootPath, query: q.trim(), limit: 30 })
+        .then((res) => {
+          setContentResults(res as ContentResult[])
+          setSearching(false)
+        })
+        .catch(() => { setContentResults([]); setSearching(false) })
+    }
+  }, [rootPath])
+
+  const handleChange = (value: string): void => {
+    setQuery(value)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => doSearch(value, mode), mode === 'content' ? 400 : 200)
+  }
+
+  const toggleMode = (): void => {
+    const next = mode === 'files' ? 'content' : 'files'
+    setMode(next)
+    setFileResults([])
+    setContentResults([])
+    if (query.trim()) {
+      doSearch(query, next)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      setQuery('')
+      setFileResults([])
+      setContentResults([])
+    }
+  }
+
+  const results = mode === 'files' ? fileResults : contentResults
+  const hasResults = results.length > 0
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--border)' }}>
+      <div style={{ padding: '6px 8px', display: 'flex', gap: 4 }}>
+        <input
+          value={query}
+          onChange={(e) => handleChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={mode === 'files' ? 'Search files...' : 'Search in files...'}
+          style={{
+            flex: 1,
+            padding: '4px 8px',
+            fontSize: 11,
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            color: 'var(--text)',
+            fontFamily: 'var(--mono)',
+            outline: 'none',
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)' }}
+        />
+        <button
+          onClick={toggleMode}
+          title={mode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
+          style={{
+            padding: '2px 6px',
+            fontSize: 10,
+            background: mode === 'content' ? 'var(--accent-dim)' : 'var(--surface2)',
+            border: `1px solid ${mode === 'content' ? 'var(--accent)' : 'var(--border)'}`,
+            borderRadius: 4,
+            color: mode === 'content' ? 'var(--accent2)' : 'var(--text3)',
+            fontFamily: 'var(--mono)',
+            cursor: 'pointer',
+            flexShrink: 0,
+            fontWeight: 600,
+          }}
+        >
+          Aa
+        </button>
+      </div>
+      {query.trim() && (
+        <div style={{ maxHeight: 280, overflowY: 'auto', paddingBottom: 4 }}>
+          {searching && (
+            <div style={{ padding: '4px 12px', fontSize: 10, color: 'var(--text3)' }}>
+              Searching...
+            </div>
+          )}
+          {!searching && !hasResults && (
+            <div style={{ padding: '4px 12px', fontSize: 10, color: 'var(--text3)' }}>
+              No results
+            </div>
+          )}
+          {mode === 'files' && fileResults.map((r) => {
+            const fileIcon = getFileIcon(r.name)
+            return (
+              <div
+                key={r.path}
+                onClick={() => { openFile(r.path); setQuery(''); setFileResults([]) }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '3px 12px',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  color: 'var(--text2)',
+                  transition: 'all .1s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)' }}
+              >
+                <span style={{ color: fileIcon.color, fontSize: 12, width: 14, textAlign: 'center', flexShrink: 0 }}>
+                  {fileIcon.icon}
+                </span>
+                <span style={{ fontWeight: 500, flexShrink: 0 }}>{r.name}</span>
+                <span style={{ color: 'var(--text3)', fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.relativePath}
+                </span>
+              </div>
+            )
+          })}
+          {mode === 'content' && contentResults.map((r, i) => {
+            const fileIcon = getFileIcon(r.name)
+            return (
+              <div
+                key={`${r.path}:${r.line}:${i}`}
+                onClick={() => { openFile(r.path); setQuery(''); setContentResults([]) }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                  padding: '4px 12px',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  color: 'var(--text2)',
+                  transition: 'all .1s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: fileIcon.color, fontSize: 12, width: 14, textAlign: 'center', flexShrink: 0 }}>
+                    {fileIcon.icon}
+                  </span>
+                  <span style={{ fontWeight: 500, flexShrink: 0 }}>{r.relativePath}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: 9, flexShrink: 0 }}>:{r.line}</span>
+                </div>
+                <div style={{
+                  fontSize: 10,
+                  color: 'var(--text3)',
+                  paddingLeft: 20,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {r.lineContent}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function FileTree(): JSX.Element {
   const activeWorktreePath = useActiveWorktreePath()
   const tree = useFileTreeStore((s) =>
@@ -222,10 +426,13 @@ export function FileTree(): JSX.Element {
   }
 
   return (
-    <div style={{ paddingTop: 4, paddingBottom: 4 }}>
-      {sortChildren(tree.children ?? []).map((child) => (
-        <TreeNode key={child.path} node={child} depth={0} />
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {activeWorktreePath && <FileSearch rootPath={activeWorktreePath} />}
+      <div style={{ flex: 1, overflowY: 'auto', paddingTop: 4, paddingBottom: 4 }}>
+        {sortChildren(tree.children ?? []).map((child) => (
+          <TreeNode key={child.path} node={child} depth={0} />
+        ))}
+      </div>
     </div>
   )
 }

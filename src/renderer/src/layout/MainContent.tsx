@@ -1,10 +1,8 @@
+import { useRef } from 'react'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
-// tabStore unused after tmux migration — keep import if lifecycle phases need it
-// import { useTabStore } from '@renderer/store/tabStore'
 import { DirectoryPicker } from '@renderer/components/DirectoryPicker'
 import { WorkspaceView } from '@renderer/components/WorkspaceView'
-import { TmuxInstallCheck } from '@renderer/components/TmuxInstallCheck'
 import {
   ModePicker,
   ProposePhase,
@@ -160,6 +158,13 @@ export function MainContent(): JSX.Element {
   const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
   const lifecycleByWorktree = useWorkspaceStore((s) => s.lifecycleByWorktree)
 
+  // Track all worktrees that have been visited so we can keep them mounted
+  const visitedRef = useRef<Set<string>>(new Set())
+  if (activeWorktreePath) {
+    visitedRef.current.add(activeWorktreePath)
+  }
+  const visited = Array.from(visitedRef.current)
+
   // No workspace selected — welcome screen
   if (!activeWorktreePath) {
     return (
@@ -180,29 +185,34 @@ export function MainContent(): JSX.Element {
     )
   }
 
-  const mode = modeByWorktree[activeWorktreePath] ?? 'terminal'  // default to terminal (tmux)
-  const lifecycle = lifecycleByWorktree[activeWorktreePath]
-  const currentPhase = lifecycle?.phase ?? null
-
-  // Lifecycle mode — show phase track + phase content
-  if (mode === 'lifecycle' && currentPhase) {
-    return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-        <InteractivePhaseTrack currentPhase={currentPhase} worktreePath={activeWorktreePath} />
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <LifecycleContent worktreePath={activeWorktreePath} phase={currentPhase} />
-        </div>
-        <PhaseFooter worktreePath={activeWorktreePath} currentPhase={currentPhase} />
-      </div>
-    )
-  }
-
-  // Terminal or Claude mode — show workspace view
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-      <TmuxInstallCheck>
-        <WorkspaceView key={activeWorktreePath} worktreePath={activeWorktreePath} />
-      </TmuxInstallCheck>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden', position: 'relative' }}>
+      {visited.map((wtPath) => {
+        const isActive = wtPath === activeWorktreePath
+        const mode = modeByWorktree[wtPath] ?? 'terminal'
+        const lifecycle = lifecycleByWorktree[wtPath]
+        const currentPhase = lifecycle?.phase ?? null
+
+        // Lifecycle mode
+        if (mode === 'lifecycle' && currentPhase) {
+          return (
+            <div key={wtPath} style={{ display: isActive ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+              <InteractivePhaseTrack currentPhase={currentPhase} worktreePath={wtPath} />
+              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <LifecycleContent worktreePath={wtPath} phase={currentPhase} />
+              </div>
+              <PhaseFooter worktreePath={wtPath} currentPhase={currentPhase} />
+            </div>
+          )
+        }
+
+        // Terminal or Claude mode
+        return (
+          <div key={wtPath} style={{ display: isActive ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <WorkspaceView worktreePath={wtPath} />
+          </div>
+        )
+      })}
     </div>
   )
 }

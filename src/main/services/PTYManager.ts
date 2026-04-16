@@ -5,12 +5,20 @@ interface PTYSession {
   pty: IPty
   worktreeId: string
   type: 'claude' | 'terminal'
+  /** First-prompt capture state for claude sessions */
+  promptCapture?: {
+    buffer: string
+    done: boolean
+  }
 }
 
 class PTYManager {
   private sessions: Map<string, PTYSession> = new Map()
   private onDataCallback: ((id: string, data: string) => void) | null = null
   private onExitCallback: ((id: string, exitCode: number) => void) | null = null
+  private onFirstPromptCallback:
+    | ((id: string, worktreeId: string, prompt: string) => void)
+    | null = null
 
   setCallbacks(
     onData: (id: string, data: string) => void,
@@ -36,13 +44,15 @@ class PTYManager {
     }
 
     const defaultShell = process.env.SHELL || '/bin/zsh'
-    const shell = options.type === 'claude' ? 'claude' : (options.shell || defaultShell)
+    const shell = options.shell || defaultShell
     const args = options.args || []
 
     const env = {
       ...process.env,
       ...options.env,
-      TERM: 'xterm-256color'
+      TERM: 'xterm-256color',
+      LANG: process.env.LANG || 'en_US.UTF-8',
+      LC_ALL: process.env.LC_ALL || process.env.LANG || 'en_US.UTF-8'
     } as Record<string, string>
 
     try {
@@ -70,6 +80,16 @@ class PTYManager {
       })
 
       this.sessions.set(id, session)
+
+      // For claude panels: launch claude inside the shell after it's ready
+      // --continue resumes the most recent conversation for this directory
+      if (options.type === 'claude') {
+        setTimeout(() => {
+          if (this.sessions.has(id)) {
+            ptyProcess.write('claude --continue 2>/dev/null || claude\n')
+          }
+        }, 500)
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       console.error(`Failed to spawn PTY "${shell}": ${message}`)
@@ -114,6 +134,14 @@ class PTYManager {
 
   has(id: string): boolean {
     return this.sessions.has(id)
+  }
+
+  listActive(): Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal' }> {
+    const result: Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal' }> = []
+    for (const [id, session] of this.sessions) {
+      result.push({ id, worktreeId: session.worktreeId, type: session.type })
+    }
+    return result
   }
 }
 

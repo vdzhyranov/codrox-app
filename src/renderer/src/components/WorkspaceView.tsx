@@ -1,40 +1,8 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
-import { useTmuxPTY } from '@renderer/hooks/useTmuxPTY'
+import { useRef, useCallback, useState } from 'react'
+import { usePTY } from '@renderer/hooks/usePTY'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { FileViewer } from '@renderer/components/FileViewer'
 import { AgentOutputViewer } from '@renderer/components/AgentOutputViewer'
-
-// ── AgentTerminal (attaches to existing tmux session) ─────────────────────────
-
-function AgentTerminal({
-  sessionName,
-  worktreePath,
-}: {
-  sessionName: string
-  worktreePath: string
-}): JSX.Element {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // Attach to the agent's existing tmux session (don't create a new one)
-  useTmuxPTY({ sessionName, worktreePath, containerRef })
-
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        background: '#0a0a0b',
-      }}
-    >
-      <div
-        ref={containerRef}
-        style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
-      />
-    </div>
-  )
-}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -155,51 +123,8 @@ interface PanelTerminalProps {
 
 function PanelTerminal({ sessionName, worktreePath, type }: PanelTerminalProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  const didLaunch = useRef(false)
 
-  useTmuxPTY({ sessionName, worktreePath, containerRef })
-
-  // For claude panels: auto-launch claude if the pane is at a shell prompt
-  useEffect(() => {
-    if (type !== 'claude' || didLaunch.current) return
-
-    let cancelled = false
-    let attempts = 0
-    const maxAttempts = 8
-
-    const poll = async (): Promise<void> => {
-      if (cancelled || attempts >= maxAttempts) return
-      attempts++
-
-      try {
-        const cmd = (await window.api.invoke('tmux:getPaneCommand', { name: sessionName })) as string
-        const trimmed = cmd.trim()
-
-        if (!trimmed) {
-          // Session not ready yet, retry
-          setTimeout(poll, 500)
-          return
-        }
-
-        // If it's a shell, launch claude
-        if (/^(zsh|bash|sh|fish|login|-zsh|-bash)$/i.test(trimmed)) {
-          didLaunch.current = true
-          await window.api.invoke('tmux:sendKeys', { name: sessionName, keys: 'claude' })
-          return
-        }
-
-        // If claude/node is already running, just attach (do nothing)
-        didLaunch.current = true
-      } catch {
-        // Session not ready, keep retrying
-        if (!cancelled) setTimeout(poll, 500)
-      }
-    }
-
-    // Start polling after a short delay for session init
-    const t = setTimeout(poll, 800)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [sessionName, type])
+  usePTY({ ptyId: sessionName, worktreeId: sessionName, cwd: worktreePath, type, containerRef })
 
   return (
     <div
@@ -884,8 +809,8 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           minHeight: 0,
         }}
       >
-        {/* Work tab: pane tree */}
-        {isWorkTab && (
+        {/* Work tab: pane tree — hidden (not unmounted) when viewing files */}
+        <div style={{ flex: 1, display: isWorkTab ? 'flex' : 'none', overflow: 'hidden', minHeight: 0 }}>
           <PaneRenderer
             node={paneTree}
             worktreePath={worktreePath}
@@ -899,7 +824,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
             onClose={closePanel}
             canClose={leafCount > 1}
           />
-        )}
+        </div>
 
         {/* File preview tab */}
         {!isWorkTab && !activeTab.startsWith('agent:') && !activeTab.startsWith('agent-output:') && (
@@ -908,13 +833,16 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           </div>
         )}
 
-        {/* Agent terminal tab — attach to agent's tmux session */}
+        {/* Agent terminal tab */}
         {!isWorkTab && activeTab.startsWith('agent:') && (
-          <AgentTerminal
-            key={activeTab}
-            sessionName={activeTab.slice(6)}
-            worktreePath={worktreePath}
-          />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0a0a0b' }}>
+            <PanelTerminal
+              key={activeTab}
+              sessionName={activeTab.slice(6)}
+              worktreePath={worktreePath}
+              type="terminal"
+            />
+          </div>
         )}
 
         {/* Agent output viewer — renders JSONL conversation */}
@@ -1019,14 +947,14 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           </button>
         </div>
 
-        {/* Bottom terminal content */}
-        {!bottomTerminal.collapsed && (
+        {/* Bottom terminal content — hidden (not unmounted) when collapsed */}
+        <div style={{ flex: 1, display: bottomTerminal.collapsed ? 'none' : 'flex', overflow: 'hidden', minHeight: 0 }}>
           <PanelTerminal
             sessionName={bottomTerminal.sessionName}
             worktreePath={worktreePath}
             type="terminal"
           />
-        )}
+        </div>
       </div>
     </div>
   )

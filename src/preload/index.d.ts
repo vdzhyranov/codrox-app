@@ -4,6 +4,8 @@ interface ForgeAPI {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>
   on(channel: string, callback: (...args: unknown[]) => void): () => void
   send(channel: string, ...args: unknown[]): void
+  clipboardWriteText(text: string): void
+  clipboardReadText(): string
 }
 
 declare global {

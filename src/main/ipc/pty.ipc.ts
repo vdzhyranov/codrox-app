@@ -1,4 +1,4 @@
-import { IpcMain, BrowserWindow } from 'electron'
+import { IpcMain, BrowserWindow, shell } from 'electron'
 import { ptyManager } from '../services/PTYManager'
 
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
@@ -44,5 +44,17 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
 
   ipcMain.handle('pty:destroy', (_event, payload: { id: string }) => {
     ptyManager.destroy(payload.id)
+  })
+
+  ipcMain.handle('pty:listActive', () => {
+    return ptyManager.listActive()
+  })
+
+  ipcMain.handle('shell:openExternal', (_event, payload: { url: string }) => {
+    shell.openExternal(payload.url)
+  })
+
+  ipcMain.handle('shell:openPath', (_event, payload: { path: string }) => {
+    shell.openPath(payload.path)
   })
 }

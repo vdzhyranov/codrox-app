@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useSidebarStore } from '@renderer/store/sidebarStore'
-import { AgentPanel } from '@renderer/components/AgentPanel'
 import type { Workspace, Worktree } from '@shared/types'
 
 // Stable color palette for workspace dots
@@ -30,23 +29,20 @@ function useWorktreeStatus(worktreePath: string): WorktreeStatus {
   useEffect(() => {
     let cancelled = false
     const worktreeBase = (worktreePath.split('/').pop() ?? 'workspace').replace(/[^a-zA-Z0-9-]/g, '-')
-    const sessionName = `codrox-${worktreeBase}-claude-main`
 
     const check = async (): Promise<void> => {
       if (cancelled) return
       try {
-        const exists = await window.api.invoke('tmux:hasSession', { name: sessionName })
-        if (!exists) {
-          setStatus('idle')
-          return
-        }
-        const cmd = (await window.api.invoke('tmux:getPaneCommand', { name: sessionName })) as string
-        const trimmed = cmd.trim()
-        if (/^(zsh|bash|sh|fish|login|-zsh|-bash)$/i.test(trimmed) || !trimmed) {
-          setStatus('waiting') // at shell prompt — waiting for user
-        } else {
-          setStatus('active') // claude or other process running
-        }
+        const active = (await window.api.invoke('pty:listActive', undefined)) as Array<{
+          id: string
+          worktreeId: string
+          type: 'claude' | 'terminal'
+        }>
+        // Check if any claude PTY matches this worktree
+        const claudePty = active.find(
+          (s) => s.type === 'claude' && s.id.includes(worktreeBase)
+        )
+        setStatus(claudePty ? 'active' : 'idle')
       } catch {
         setStatus('idle')
       }
@@ -63,30 +59,27 @@ function useWorktreeStatus(worktreePath: string): WorktreeStatus {
 function StatusDot({ worktreePath }: { worktreePath: string }): JSX.Element {
   const status = useWorktreeStatus(worktreePath)
 
-  // green = idle/ready, yellow = claude working, pink = waiting for user
-  const color =
-    status === 'active' ? 'var(--amber)' :
-    status === 'waiting' ? 'var(--pink)' :
-    'var(--green)'
+  const emoji =
+    status === 'active' ? '💻' :
+    status === 'waiting' ? '❓' :
+    '💤'
 
   const title =
     status === 'active' ? 'Working' :
     status === 'waiting' ? 'Waiting for response' :
-    'Ready'
+    'Idle'
 
   return (
-    <div
+    <span
       title={title}
       style={{
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        background: color,
+        fontSize: 10,
+        lineHeight: 1,
         flexShrink: 0,
-        boxShadow: status === 'active' ? `0 0 4px ${color}` : 'none',
       }}
-      className={status === 'active' ? 'pulse' : undefined}
-    />
+    >
+      {emoji}
+    </span>
   )
 }
 
@@ -99,7 +92,6 @@ export function ActivityBar(): JSX.Element {
 
   const items: { id: SidebarView; icon: string; label: string }[] = [
     { id: 'explorer', icon: '◈', label: 'Explorer' },
-    { id: 'agents', icon: '⊛', label: 'Agents' },
     { id: 'settings', icon: '⚙', label: 'Settings' },
   ]
 
@@ -1286,7 +1278,6 @@ export function SidebarContent(): JSX.Element {
       }}
     >
       {activeView === 'explorer' && <ExplorerView onAddWorkspace={handleAddWorkspace} />}
-      {activeView === 'agents' && <AgentPanel />}
       {activeView === 'settings' && <SettingsView />}
     </div>
   )

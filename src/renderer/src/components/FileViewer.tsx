@@ -369,7 +369,7 @@ export function FileViewer(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mdRaw, setMdRaw] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('diff')
+  const [viewMode, setViewMode] = useState<ViewMode>('content')
 
   useEffect(() => {
     if (!filePath) {

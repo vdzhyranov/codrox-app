@@ -52,6 +52,10 @@ export interface IpcChannels {
     request: { path: string; depth?: number }
     response: FileTreeNode
   }
+  'fs:search': {
+    request: { rootPath: string; query: string; limit?: number }
+    response: { name: string; path: string; relativePath: string }[]
+  }
   'fs:readFile': {
     request: { path: string }
     response: { content: string }

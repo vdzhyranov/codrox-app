@@ -210,31 +210,6 @@ export function AgentPanel(): JSX.Element {
         startedAt: new Date(e.startedAt).toISOString(),
       }))
 
-      // Also check tmux for @-prefixed agent sessions (OMC team agents)
-      try {
-        const sessions = (await window.api.invoke('tmux:listSessions', undefined)) as Array<{
-          name: string
-          windows: number
-          attached: boolean
-        }>
-        for (const s of sessions) {
-          if (s.name.startsWith('@')) {
-            const name = s.name.slice(1)
-            const parts = name.split('-')
-            const type = parts.length > 1 ? parts.slice(0, -1).join('-') : 'agent'
-            agentInfos.unshift({
-              id: s.name,
-              name,
-              type,
-              task: '',
-              status: 'running',
-              sessionName: s.name,
-              startedAt: null,
-            })
-          }
-        }
-      } catch { /* ignore */ }
-
       setAgents(agentInfos)
     } catch {
       setAgents([])
@@ -265,18 +240,17 @@ export function AgentPanel(): JSX.Element {
   }
 
   const handleKillAgent = useCallback(async (agent: AgentInfo) => {
-    try {
-      await window.api.invoke('tmux:killSession', { name: agent.sessionName })
-      // Also close any open tab for this agent
-      const store = useFileTreeStore.getState()
-      const tabKey = `agent:${agent.sessionName}`
-      if (store.openFiles.includes(tabKey)) {
-        store.closeFile(tabKey)
-      }
-      refreshAgents()
-    } catch {
-      // ignore
+    // Close any open tab for this agent
+    const store = useFileTreeStore.getState()
+    const tabKey = `agent:${agent.sessionName}`
+    if (store.openFiles.includes(tabKey)) {
+      store.closeFile(tabKey)
     }
+    const outputTabKey = `agent-output:${agent.id}`
+    if (store.openFiles.includes(outputTabKey)) {
+      store.closeFile(outputTabKey)
+    }
+    refreshAgents()
   }, [refreshAgents])
 
   const running = agents.filter((a) => a.status === 'running')

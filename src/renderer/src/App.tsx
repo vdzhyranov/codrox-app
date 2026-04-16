@@ -100,7 +100,6 @@ function TitleBar(): JSX.Element {
     >
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <span style={{ color: 'var(--accent)', fontSize: 16, lineHeight: 1 }}>◈</span>
         <span
           style={{
             fontFamily: 'var(--sans)',
