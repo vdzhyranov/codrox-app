@@ -11,3 +11,13 @@ export type {
   IpcResponse,
   IpcEventPayload
 } from './ipc'
+export type {
+  LinearUser,
+  LinearTeam,
+  LinearTask,
+  LinearTaskState,
+  LinearLabel,
+  LinearAuthState,
+  CreateTaskInput,
+  WorktreeLinearLink
+} from './linear'

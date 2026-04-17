@@ -1,6 +1,7 @@
 import type { Workspace, Worktree, AppState } from './workspace'
 import type { FileTreeNode, FileChangeEvent } from './filesystem'
 import type { GitFileStatus } from './git'
+import type { LinearUser, LinearTeam, LinearTask, LinearAuthState, CreateTaskInput, WorktreeLinearLink } from './linear'
 
 // Request-response channel definitions
 export interface IpcChannels {
@@ -79,6 +80,51 @@ export interface IpcChannels {
   'git:diff': {
     request: { worktreePath: string; filePath: string }
     response: { diff: string }
+  }
+  // Linear integration
+  'linear:auth': {
+    request: { apiKey: string }
+    response: { success: boolean; user: LinearUser | null }
+  }
+  'linear:getApiKey': {
+    request: void
+    response: { apiKey: string }
+  }
+  'linear:logout': {
+    request: void
+    response: { success: boolean }
+  }
+  'linear:status': {
+    request: void
+    response: LinearAuthState
+  }
+  'linear:fetchTasks': {
+    request: { teamId?: string } | void
+    response: LinearTask[]
+  }
+  'linear:createTask': {
+    request: CreateTaskInput
+    response: LinearTask
+  }
+  'linear:getTeams': {
+    request: void
+    response: LinearTeam[]
+  }
+  'linear:getBranchName': {
+    request: { taskId: string }
+    response: { branchName: string }
+  }
+  'linear:linkWorktree': {
+    request: { worktreePath: string; taskId: string; taskIdentifier: string }
+    response: { success: boolean }
+  }
+  'linear:getLinkedTask': {
+    request: { worktreePath: string }
+    response: WorktreeLinearLink | null
+  }
+  'linear:unlinkWorktree': {
+    request: { worktreePath: string }
+    response: { success: boolean }
   }
   'pty:create': {
     request: {
