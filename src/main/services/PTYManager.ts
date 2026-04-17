@@ -167,6 +167,7 @@ class PTYManager {
       title: 'Codrox',
       body: `Claude finished working on ${worktreeId}`,
       silent: false,
+      sound: 'default',
     })
     n.show()
   }
