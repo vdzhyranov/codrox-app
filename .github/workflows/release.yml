@@ -42,8 +42,6 @@ jobs:
             build_cmd: build:mac
           - os: ubuntu-latest
             build_cmd: build:linux
-          - os: windows-latest
-            build_cmd: build:win
 
     runs-on: ${{ matrix.os }}
 
@@ -70,7 +68,6 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
-            dist/*.exe
             dist/*.AppImage
             dist/*.deb
             dist/*.yml

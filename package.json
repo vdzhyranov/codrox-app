@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
@@ -9,7 +9,6 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
     "typecheck": "tsc --noEmit",
@@ -33,9 +32,6 @@
       "!{karma.conf.js,.babelrc,.babelrc.js,jest.config.js,.mocharc.yml}",
       "!src/**"
     ],
-    "win": {
-      "target": "nsis"
-    },
     "mac": {
       "target": "dmg",
       "hardenedRuntime": true,
