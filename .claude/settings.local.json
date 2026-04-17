@@ -18,7 +18,8 @@
       "Bash(git add:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:tmux.thijsverreck.com)",
-      "Bash(head -100 /private/tmp/claude-501/-Applications-Development-codrox-app/4c6ff3a8-bba7-4f21-a0d0-1e9017f08864/tasks/*.output)"
+      "Bash(head -100 /private/tmp/claude-501/-Applications-Development-codrox-app/4c6ff3a8-bba7-4f21-a0d0-1e9017f08864/tasks/*.output)",
+      "Bash(find:*)"
     ]
   }
 }
