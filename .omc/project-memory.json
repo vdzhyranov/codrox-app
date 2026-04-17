@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775502023170,
-  "projectRoot": "/Applications/Development/codrox-app",
+  "lastScanned": 1776365722695,
+  "projectRoot": "/Applications/Development/codrox-app-task-n04sk",
   "techStack": {
     "languages": [
       {
@@ -65,7 +65,8 @@
       "build:linux": "npm run build && electron-builder --linux",
       "typecheck": "tsc --noEmit",
       "test": "vitest run",
-      "postinstall": "electron-rebuild"
+      "postinstall": "electron-rebuild",
+      "dist": "electron-builder"
     }
   },
   "conventions": {
@@ -84,81 +85,94 @@
   },
   "customNotes": [],
   "directoryMap": {
-    "out": {
-      "path": "out",
-      "purpose": "Build output",
-      "fileCount": 0,
-      "lastAccessed": 1775502023162,
-      "keyFiles": []
-    },
     "resources": {
       "path": "resources",
       "purpose": null,
-      "fileCount": 0,
-      "lastAccessed": 1775502023162,
-      "keyFiles": []
+      "fileCount": 1,
+      "lastAccessed": 1776365722675,
+      "keyFiles": [
+        "codrox.tmux.conf"
+      ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 0,
-      "lastAccessed": 1775502023165,
+      "lastAccessed": 1776365722675,
       "keyFiles": []
     }
   },
   "hotPaths": [
     {
       "path": "src/renderer/src/layout/Sidebar.tsx",
-      "accessCount": 86,
-      "lastAccessed": 1775581414319,
+      "accessCount": 108,
+      "lastAccessed": 1776368940279,
       "type": "file"
     },
     {
       "path": "src/renderer/src/layout/MainContent.tsx",
-      "accessCount": 66,
-      "lastAccessed": 1775580765724,
+      "accessCount": 68,
+      "lastAccessed": 1776369537517,
       "type": "file"
     },
     {
       "path": "src/renderer/src/App.tsx",
-      "accessCount": 58,
-      "lastAccessed": 1775564031548,
+      "accessCount": 59,
+      "lastAccessed": 1776365867372,
       "type": "file"
     },
     {
       "path": "",
-      "accessCount": 56,
-      "lastAccessed": 1775564061746,
+      "accessCount": 57,
+      "lastAccessed": 1776365844712,
       "type": "directory"
     },
     {
       "path": "src/renderer/src/layout/RightPanel.tsx",
-      "accessCount": 50,
-      "lastAccessed": 1775582500611,
+      "accessCount": 51,
+      "lastAccessed": 1776365868310,
       "type": "file"
     },
     {
       "path": "src/main/ipc/workspace.ipc.ts",
-      "accessCount": 28,
-      "lastAccessed": 1775579867141,
+      "accessCount": 31,
+      "lastAccessed": 1776366087862,
       "type": "file"
     },
     {
       "path": "src/renderer/src/store/workspaceStore.ts",
-      "accessCount": 27,
-      "lastAccessed": 1775579777225,
+      "accessCount": 30,
+      "lastAccessed": 1776366782358,
       "type": "file"
     },
     {
       "path": "src/main/ipc/index.ts",
-      "accessCount": 25,
-      "lastAccessed": 1775582319672,
+      "accessCount": 29,
+      "lastAccessed": 1776366702899,
       "type": "file"
     },
     {
       "path": "src/shared/types/workspace.ts",
+      "accessCount": 27,
+      "lastAccessed": 1776366085527,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/ipc.ts",
+      "accessCount": 27,
+      "lastAccessed": 1776368576151,
+      "type": "file"
+    },
+    {
+      "path": "src/main/index.ts",
+      "accessCount": 25,
+      "lastAccessed": 1776365852870,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
       "accessCount": 24,
-      "lastAccessed": 1775564062094,
+      "lastAccessed": 1776365838427,
       "type": "file"
     },
     {
@@ -168,21 +182,9 @@
       "type": "file"
     },
     {
-      "path": "src/main/index.ts",
-      "accessCount": 23,
-      "lastAccessed": 1775564015932,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 23,
-      "lastAccessed": 1775564061539,
-      "type": "file"
-    },
-    {
       "path": "src/preload/index.ts",
-      "accessCount": 22,
-      "lastAccessed": 1775580588879,
+      "accessCount": 23,
+      "lastAccessed": 1776365859521,
       "type": "file"
     },
     {
@@ -192,9 +194,9 @@
       "type": "file"
     },
     {
-      "path": "src/shared/types/ipc.ts",
+      "path": "src/main/ipc/git.ipc.ts",
       "accessCount": 21,
-      "lastAccessed": 1775579748362,
+      "lastAccessed": 1776366087630,
       "type": "file"
     },
     {
@@ -223,50 +225,44 @@
     },
     {
       "path": "src/renderer/src/store/tabStore.ts",
-      "accessCount": 18,
-      "lastAccessed": 1775564012176,
-      "type": "file"
-    },
-    {
-      "path": "src/main/ipc/git.ipc.ts",
-      "accessCount": 18,
-      "lastAccessed": 1775564037611,
-      "type": "file"
-    },
-    {
-      "path": "src/shared/types/tabs.ts",
-      "accessCount": 15,
-      "lastAccessed": 1775563349465,
-      "type": "file"
-    },
-    {
-      "path": "src/main/services/GitService.ts",
-      "accessCount": 14,
-      "lastAccessed": 1775564041560,
+      "accessCount": 19,
+      "lastAccessed": 1776365857638,
       "type": "file"
     },
     {
       "path": "src/shared/types/index.ts",
-      "accessCount": 14,
-      "lastAccessed": 1775564059193,
+      "accessCount": 18,
+      "lastAccessed": 1776366691593,
+      "type": "file"
+    },
+    {
+      "path": "src/main/services/GitService.ts",
+      "accessCount": 17,
+      "lastAccessed": 1776366087065,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/tabs.ts",
+      "accessCount": 16,
+      "lastAccessed": 1776365865958,
       "type": "file"
     },
     {
       "path": "src/main/services/PersistenceService.ts",
-      "accessCount": 13,
-      "lastAccessed": 1775564032994,
+      "accessCount": 15,
+      "lastAccessed": 1776366086613,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/store/fileTreeStore.ts",
+      "accessCount": 14,
+      "lastAccessed": 1776365858628,
       "type": "file"
     },
     {
       "path": "src/renderer/src/components/GitChanges.tsx",
       "accessCount": 13,
       "lastAccessed": 1775564036627,
-      "type": "file"
-    },
-    {
-      "path": "src/renderer/src/store/fileTreeStore.ts",
-      "accessCount": 13,
-      "lastAccessed": 1775564042925,
       "type": "file"
     },
     {
@@ -289,14 +285,20 @@
     },
     {
       "path": "src/preload/index.d.ts",
-      "accessCount": 8,
-      "lastAccessed": 1775562055902,
+      "accessCount": 9,
+      "lastAccessed": 1776365860032,
       "type": "file"
     },
     {
       "path": "codrox.md",
-      "accessCount": 7,
-      "lastAccessed": 1775412910090,
+      "accessCount": 8,
+      "lastAccessed": 1776365874995,
+      "type": "file"
+    },
+    {
+      "path": "src/renderer/src/lib/ipc.ts",
+      "accessCount": 8,
+      "lastAccessed": 1776365885625,
       "type": "file"
     },
     {
@@ -306,39 +308,33 @@
       "type": "file"
     },
     {
+      "path": "src/shared/types/filesystem.ts",
+      "accessCount": 7,
+      "lastAccessed": 1776365866432,
+      "type": "file"
+    },
+    {
+      "path": "src/shared/types/git.ts",
+      "accessCount": 7,
+      "lastAccessed": 1776365866903,
+      "type": "file"
+    },
+    {
+      "path": "electron.vite.config.ts",
+      "accessCount": 7,
+      "lastAccessed": 1776365874479,
+      "type": "file"
+    },
+    {
       "path": "src/renderer/src/main.tsx",
       "accessCount": 6,
       "lastAccessed": 1775421395087,
       "type": "file"
     },
     {
-      "path": "src/shared/types/git.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775500670305,
-      "type": "file"
-    },
-    {
-      "path": "src/renderer/src/lib/ipc.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775564049183,
-      "type": "file"
-    },
-    {
       "path": "src/renderer/index.html",
       "accessCount": 6,
       "lastAccessed": 1775564054060,
-      "type": "file"
-    },
-    {
-      "path": "electron.vite.config.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775564055107,
-      "type": "file"
-    },
-    {
-      "path": "src/shared/types/filesystem.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775582229305,
       "type": "file"
     },
     {
@@ -366,21 +362,21 @@
       "type": "file"
     },
     {
+      "path": "src/renderer/src/store/gitStore.ts",
+      "accessCount": 5,
+      "lastAccessed": 1776365857117,
+      "type": "file"
+    },
+    {
       "path": "src/renderer/env.d.ts",
       "accessCount": 4,
       "lastAccessed": 1775562056300,
       "type": "file"
     },
     {
-      "path": "src/renderer/src/store/gitStore.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775564011454,
-      "type": "file"
-    },
-    {
       "path": "src/renderer/src/lib/constants.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775421000407,
+      "accessCount": 4,
+      "lastAccessed": 1776365869833,
       "type": "file"
     },
     {

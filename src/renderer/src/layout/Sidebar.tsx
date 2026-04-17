@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useSidebarStore } from '@renderer/store/sidebarStore'
-import type { Workspace, Worktree } from '@shared/types'
+import { useLinearStore } from '@renderer/store/linearStore'
+import { CreateTaskModal } from '@renderer/components/CreateTaskModal'
+import type { Workspace, Worktree, LinearTask } from '@shared/types'
 
 // Stable color palette for workspace dots
 const DOT_COLORS = [
@@ -19,69 +21,6 @@ function getDotColor(index: number): string {
 
 type SidebarView = 'explorer' | 'settings'
 
-// ── Worktree status helpers ───────────────────────────────────────────────────
-
-type WorktreeStatus = 'active' | 'waiting' | 'idle'
-
-function useWorktreeStatus(worktreePath: string): WorktreeStatus {
-  const [status, setStatus] = useState<WorktreeStatus>('idle')
-
-  useEffect(() => {
-    let cancelled = false
-    const worktreeBase = (worktreePath.split('/').pop() ?? 'workspace').replace(/[^a-zA-Z0-9-]/g, '-')
-
-    const check = async (): Promise<void> => {
-      if (cancelled) return
-      try {
-        const active = (await window.api.invoke('pty:listActive', undefined)) as Array<{
-          id: string
-          worktreeId: string
-          type: 'claude' | 'terminal'
-        }>
-        // Check if any claude PTY matches this worktree
-        const claudePty = active.find(
-          (s) => s.type === 'claude' && s.id.includes(worktreeBase)
-        )
-        setStatus(claudePty ? 'active' : 'idle')
-      } catch {
-        setStatus('idle')
-      }
-    }
-
-    check()
-    const interval = setInterval(check, 3000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [worktreePath])
-
-  return status
-}
-
-function StatusDot({ worktreePath }: { worktreePath: string }): JSX.Element {
-  const status = useWorktreeStatus(worktreePath)
-
-  const emoji =
-    status === 'active' ? '💻' :
-    status === 'waiting' ? '❓' :
-    '💤'
-
-  const title =
-    status === 'active' ? 'Working' :
-    status === 'waiting' ? 'Waiting for response' :
-    'Idle'
-
-  return (
-    <span
-      title={title}
-      style={{
-        fontSize: 10,
-        lineHeight: 1,
-        flexShrink: 0,
-      }}
-    >
-      {emoji}
-    </span>
-  )
-}
 
 // ── Activity Bar ──────────────────────────────────────────────────────────────
 
@@ -313,6 +252,12 @@ function WorktreeNode({
   const [hovered, setHovered] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(worktree.branch || worktree.name)
+  const linkedTask = useLinearStore((s) => s.linkedTasks[worktree.path])
+  const loadLinkedTask = useLinearStore((s) => s.loadLinkedTask)
+
+  useEffect(() => {
+    loadLinkedTask(worktree.path)
+  }, [worktree.path])
 
   const handleDoubleClick = (e: React.MouseEvent): void => {
     if (worktree.isMain || !onRename) return
@@ -387,8 +332,6 @@ function WorktreeNode({
         position: 'relative',
       }}
     >
-      {/* status dot */}
-      <StatusDot worktreePath={worktree.path} />
       {/* branch / name */}
       <span
         style={{
@@ -402,6 +345,25 @@ function WorktreeNode({
       >
         {worktree.branch || worktree.name}
       </span>
+      {/* linked Linear task badge */}
+      {linkedTask && (
+        <span
+          title={linkedTask.taskIdentifier}
+          style={{
+            fontSize: 8,
+            color: 'var(--accent2)',
+            background: 'var(--accent-dim)',
+            border: '1px solid rgba(124,106,247,.25)',
+            borderRadius: 3,
+            padding: '0 4px',
+            fontFamily: 'var(--mono)',
+            flexShrink: 0,
+            lineHeight: '14px',
+          }}
+        >
+          {linkedTask.taskIdentifier}
+        </span>
+      )}
       {/* remove worktree */}
       {!worktree.isMain && (
         <button
@@ -699,6 +661,395 @@ function WorkspaceSelector({ onAddWorkspace }: { onAddWorkspace: () => void }): 
   )
 }
 
+// ── Linear task card (draggable) ─────────────────────────────────────────────
+
+function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
+  const [hovered, setHovered] = useState(false)
+  const setDraggedTask = useLinearStore((s) => s.setDraggedTask)
+
+  const priorityLabels: Record<number, { label: string; color: string }> = {
+    1: { label: '!!!', color: 'var(--red)' },
+    2: { label: '!!', color: '#f59e0b' },
+    3: { label: '!', color: 'var(--accent2)' },
+    4: { label: '~', color: 'var(--text3)' },
+  }
+  const prio = priorityLabels[task.priority]
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('application/x-linear-task', JSON.stringify({
+          id: task.id,
+          identifier: task.identifier,
+          title: task.title,
+          branchName: task.branchName,
+        }))
+        e.dataTransfer.effectAllowed = 'copy'
+        setDraggedTask(task.id)
+      }}
+      onDragEnd={() => setDraggedTask(null)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: '6px 10px',
+        margin: '0 8px 4px',
+        borderRadius: 6,
+        border: hovered ? '1px solid var(--border2)' : '1px solid var(--border)',
+        background: hovered ? 'var(--surface2)' : 'var(--surface)',
+        cursor: 'grab',
+        transition: 'all .12s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        {/* state dot */}
+        <div
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: task.state.color || 'var(--text3)',
+            flexShrink: 0,
+          }}
+        />
+        {/* identifier */}
+        <span
+          style={{
+            fontSize: 9,
+            color: 'var(--text3)',
+            fontFamily: 'var(--mono)',
+            flexShrink: 0,
+          }}
+        >
+          {task.identifier}
+        </span>
+        {/* priority */}
+        {prio && (
+          <span style={{ fontSize: 9, color: prio.color, fontFamily: 'var(--mono)', marginLeft: 'auto' }}>
+            {prio.label}
+          </span>
+        )}
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: 'var(--text2)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {task.title}
+      </div>
+    </div>
+  )
+}
+
+// ── Worktree drop zone (for Linear tasks) ────────────────────────────────────
+
+function WorktreeDropZone({
+  onDrop,
+}: {
+  onDrop: (taskData: { id: string; identifier: string; title: string; branchName: string }) => void
+}): JSX.Element {
+  const [dragOver, setDragOver] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+
+  return (
+    <div
+      onDragEnter={(e) => {
+        if (e.dataTransfer.types.includes('application/x-linear-task')) {
+          e.preventDefault()
+          setIsDragging(true)
+          setDragOver(true)
+        }
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('application/x-linear-task')) {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+          setDragOver(true)
+        }
+      }}
+      onDragLeave={(e) => {
+        // Only hide if leaving the drop zone entirely (not entering a child)
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setDragOver(false)
+          setIsDragging(false)
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragOver(false)
+        setIsDragging(false)
+        const raw = e.dataTransfer.getData('application/x-linear-task')
+        if (raw) {
+          try {
+            onDrop(JSON.parse(raw))
+          } catch { /* ignore */ }
+        }
+      }}
+      style={{
+        margin: '4px 8px',
+        padding: dragOver ? '14px 10px' : '6px 10px',
+        borderRadius: 6,
+        border: dragOver
+          ? '2px solid var(--accent)'
+          : '2px dashed rgba(124,106,247,.2)',
+        background: dragOver
+          ? 'rgba(124,106,247,.12)'
+          : 'rgba(124,106,247,.02)',
+        textAlign: 'center',
+        transition: 'all .15s',
+        minHeight: 16,
+      }}
+    >
+      <span style={{
+        fontSize: 10,
+        color: dragOver ? 'var(--accent2)' : 'var(--text3)',
+        opacity: dragOver ? 1 : 0.6,
+      }}>
+        {dragOver ? 'Release to create worktree' : 'Drop task to create worktree'}
+      </span>
+    </div>
+  )
+}
+
+// ── Linear section (auth gate + task list) ───────────────────────────────────
+
+function LinearSection(): JSX.Element {
+  const isAuthenticated = useLinearStore((s) => s.isAuthenticated)
+  const tasks = useLinearStore((s) => s.tasks)
+  const teams = useLinearStore((s) => s.teams)
+  const selectedTeamId = useLinearStore((s) => s.selectedTeamId)
+  const isLoading = useLinearStore((s) => s.isLoading)
+  const error = useLinearStore((s) => s.error)
+  const lastFetched = useLinearStore((s) => s.lastFetched)
+  const authenticate = useLinearStore((s) => s.authenticate)
+  const checkAuth = useLinearStore((s) => s.checkAuth)
+  const fetchTasks = useLinearStore((s) => s.fetchTasks)
+  const setSelectedTeam = useLinearStore((s) => s.setSelectedTeam)
+
+  const [collapsed, setCollapsed] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [connectHovered, setConnectHovered] = useState(false)
+  const [apiKey, setApiKey] = useState('')
+
+  useEffect(() => {
+    checkAuth()
+    // Load stored API key (masked — just to know one exists)
+    window.api.invoke('linear:getApiKey', undefined)
+      .then((result) => {
+        const r = result as { apiKey: string }
+        if (r.apiKey) setApiKey(r.apiKey)
+      })
+      .catch(() => {})
+  }, [])
+
+  const timeSince = lastFetched
+    ? `${Math.round((Date.now() - lastFetched) / 60000)}m ago`
+    : null
+
+  return (
+    <>
+      {/* Divider */}
+      <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
+
+      {/* Section header */}
+      <div
+        style={{
+          padding: '8px 14px 4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div
+          onClick={() => setCollapsed(!collapsed)}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          <span style={{ fontSize: 9, color: 'var(--text3)', transition: 'transform .12s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+            ▾
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: '0.12em',
+              color: 'var(--text3)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Linear
+          </span>
+        </div>
+        {isAuthenticated && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              title="Create issue"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text3)',
+                fontSize: 14,
+                lineHeight: 1,
+                padding: '0 2px',
+                transition: 'color .12s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+            >
+              +
+            </button>
+            <button
+              onClick={() => fetchTasks()}
+              title={timeSince ? `Updated ${timeSince}` : 'Refresh'}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text3)',
+                fontSize: 11,
+                lineHeight: 1,
+                padding: '0 2px',
+                transition: 'color .12s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+            >
+              ↻
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!collapsed && (
+        <>
+          {!isAuthenticated ? (
+            <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <label style={{ fontSize: 9, color: 'var(--text3)', letterSpacing: '0.06em' }}>
+                  API KEY
+                </label>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && apiKey.trim()) authenticate(apiKey.trim())
+                  }}
+                  placeholder="lin_api_..."
+                  style={{
+                    width: '100%',
+                    padding: '4px 8px',
+                    fontSize: 10,
+                    background: 'var(--surface2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    color: 'var(--text)',
+                    fontFamily: 'var(--mono)',
+                    outline: 'none',
+                  }}
+                />
+                <span style={{ fontSize: 8, color: 'var(--text3)', lineHeight: 1.4 }}>
+                  Linear Settings &gt; Account &gt; API &gt; Personal API keys
+                </span>
+              </div>
+              <button
+                onClick={() => authenticate(apiKey.trim())}
+                disabled={isLoading || !apiKey.trim()}
+                onMouseEnter={() => setConnectHovered(true)}
+                onMouseLeave={() => setConnectHovered(false)}
+                style={{
+                  width: '100%',
+                  padding: '6px 12px',
+                  fontSize: 11,
+                  background: connectHovered && apiKey.trim() ? 'var(--accent)' : 'var(--accent-dim)',
+                  border: '1px solid var(--accent)',
+                  borderRadius: 5,
+                  color: connectHovered && apiKey.trim() ? '#fff' : 'var(--accent2)',
+                  cursor: isLoading || !apiKey.trim() ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--mono)',
+                  opacity: isLoading || !apiKey.trim() ? 0.6 : 1,
+                  transition: 'all .12s',
+                }}
+              >
+                {isLoading ? 'Connecting...' : 'Connect Linear'}
+              </button>
+              {error && (
+                <span style={{ fontSize: 9, color: 'var(--red)', display: 'block' }}>
+                  {error}
+                </span>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Team filter */}
+              {teams.length > 1 && (
+                <div style={{ padding: '2px 14px 4px' }}>
+                  <select
+                    value={selectedTeamId ?? ''}
+                    onChange={(e) => setSelectedTeam(e.target.value || null)}
+                    style={{
+                      width: '100%',
+                      padding: '3px 6px',
+                      fontSize: 10,
+                      background: 'var(--surface2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      color: 'var(--text2)',
+                      fontFamily: 'var(--mono)',
+                    }}
+                  >
+                    <option value="">All teams</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>{t.key} - {t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Task list */}
+              {isLoading && tasks.length === 0 ? (
+                <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text3)' }}>
+                  Loading tasks...
+                </div>
+              ) : error ? (
+                <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--red)' }}>
+                  {error}
+                </div>
+              ) : tasks.length === 0 ? (
+                <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text3)' }}>
+                  No open tasks
+                </div>
+              ) : (
+                <div style={{ paddingTop: 2 }}>
+                  {tasks.map((task) => (
+                    <LinearTaskCard key={task.id} task={task} />
+                  ))}
+                </div>
+              )}
+
+              {/* Last updated */}
+              {timeSince && (
+                <div style={{ padding: '4px 14px', fontSize: 9, color: 'var(--text3)', textAlign: 'right' }}>
+                  Updated {timeSince}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {showCreateModal && (
+        <CreateTaskModal onClose={() => setShowCreateModal(false)} />
+      )}
+    </>
+  )
+}
+
 // ── Active workspace view ─────────────────────────────────────────────────────
 
 function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
@@ -710,6 +1061,10 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
   const removeWorktree = useWorkspaceStore((s) => s.removeWorktree)
   const createWorktree = useWorkspaceStore((s) => s.createWorktree)
   const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
+
+  const linkWorktree = useLinearStore((s) => s.linkWorktree)
+  const setDraggedTask = useLinearStore((s) => s.setDraggedTask)
+  const draggedTaskId = useLinearStore((s) => s.draggedTaskId)
 
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   const [backHovered, setBackHovered] = useState(false)
@@ -753,6 +1108,29 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
   const handleRemoveWorktree = async (worktreePath: string): Promise<void> => {
     if (!workspace) return
     await removeWorktree(workspace.id, workspace.path, worktreePath)
+  }
+
+  const handleDropLinearTask = async (taskData: {
+    id: string
+    identifier: string
+    title: string
+    branchName: string
+  }): Promise<void> => {
+    if (!workspace) return
+    setDraggedTask(null)
+    try {
+      // Fetch branch name from Linear if not provided
+      let branch = taskData.branchName
+      if (!branch) {
+        const result = (await window.api.invoke('linear:getBranchName', { taskId: taskData.id })) as { branchName: string }
+        branch = result.branchName
+      }
+      const name = `${taskData.identifier}: ${taskData.title}`.slice(0, 60)
+      const wt = await createWorktree(workspace.id, workspace.path, branch, name)
+      await linkWorktree(wt.path, taskData.id, taskData.identifier)
+    } catch {
+      // If branch exists, the user can create it manually
+    }
   }
 
   const handleRenameWorktree = async (wt: Worktree, newName: string): Promise<void> => {
@@ -928,6 +1306,12 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
             No worktrees found
           </p>
         )}
+
+        {/* Drop zone for Linear tasks — only visible while dragging */}
+        {draggedTaskId && <WorktreeDropZone onDrop={handleDropLinearTask} />}
+
+        {/* Linear integration section */}
+        <LinearSection />
       </div>
     </div>
   )

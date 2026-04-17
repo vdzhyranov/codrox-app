@@ -1,10 +1,17 @@
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
+import { Notification } from 'electron'
 
 interface PTYSession {
   pty: IPty
   worktreeId: string
   type: 'claude' | 'terminal'
+  /** Epoch ms of last data received from this PTY */
+  lastOutputAt: number
+  /** Whether this session was recently producing output (for idle detection) */
+  wasActive: boolean
+  /** Timer for detecting when claude goes idle */
+  idleTimer: ReturnType<typeof setTimeout> | null
   /** First-prompt capture state for claude sessions */
   promptCapture?: {
     buffer: string
@@ -67,10 +74,27 @@ class PTYManager {
       const session: PTYSession = {
         pty: ptyProcess,
         worktreeId: options.worktreeId,
-        type: options.type
+        type: options.type,
+        lastOutputAt: Date.now(),
+        wasActive: false,
+        idleTimer: null
       }
 
       ptyProcess.onData((data) => {
+        session.lastOutputAt = Date.now()
+        session.wasActive = true
+
+        // For claude sessions: reset idle timer on each output chunk
+        if (session.type === 'claude') {
+          if (session.idleTimer) clearTimeout(session.idleTimer)
+          session.idleTimer = setTimeout(() => {
+            if (session.wasActive) {
+              session.wasActive = false
+              this.notifyDone(session.worktreeId)
+            }
+          }, 6000)
+        }
+
         this.onDataCallback?.(id, data)
       })
 
@@ -114,6 +138,7 @@ class PTYManager {
   destroy(id: string): void {
     const session = this.sessions.get(id)
     if (session) {
+      if (session.idleTimer) clearTimeout(session.idleTimer)
       session.pty.kill()
       this.sessions.delete(id)
     }
@@ -136,10 +161,20 @@ class PTYManager {
     return this.sessions.has(id)
   }
 
-  listActive(): Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal' }> {
-    const result: Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal' }> = []
+  private notifyDone(worktreeId: string): void {
+    if (!Notification.isSupported()) return
+    const n = new Notification({
+      title: 'Codrox',
+      body: `Claude finished working on ${worktreeId}`,
+      silent: false,
+    })
+    n.show()
+  }
+
+  listActive(): Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal'; lastOutputAt: number }> {
+    const result: Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal'; lastOutputAt: number }> = []
     for (const [id, session] of this.sessions) {
-      result.push({ id, worktreeId: session.worktreeId, type: session.type })
+      result.push({ id, worktreeId: session.worktreeId, type: session.type, lastOutputAt: session.lastOutputAt })
     }
     return result
   }
