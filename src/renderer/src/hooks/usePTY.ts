@@ -58,7 +58,7 @@ export function usePTY({ ptyId, worktreeId, cwd, type, containerRef }: UsePTYOpt
       const fitAddon = new FitAddon()
       const unicode11 = new Unicode11Addon()
       const webLinks = new WebLinksAddon((_event, uri) => {
-        window.api.invoke('shell:openExternal', { url: uri })
+        window.dispatchEvent(new CustomEvent('open-in-browser', { detail: { url: uri } }))
       })
       term.loadAddon(fitAddon)
       term.loadAddon(unicode11)

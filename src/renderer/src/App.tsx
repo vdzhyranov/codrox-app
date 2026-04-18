@@ -23,6 +23,11 @@ function ResizeHandle({ onResize }: ResizeHandleProps): JSX.Element {
       lastX.current = e.clientX
       e.preventDefault()
 
+      // Add a full-screen overlay to prevent webviews/iframes from stealing mouse events
+      const overlay = document.createElement('div')
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:col-resize;'
+      document.body.appendChild(overlay)
+
       const onMouseMove = (ev: MouseEvent): void => {
         if (!dragging.current) return
         const delta = ev.clientX - lastX.current
@@ -32,6 +37,7 @@ function ResizeHandle({ onResize }: ResizeHandleProps): JSX.Element {
 
       const onMouseUp = (): void => {
         dragging.current = false
+        overlay.remove()
         document.removeEventListener('mousemove', onMouseMove)
         document.removeEventListener('mouseup', onMouseUp)
         document.body.style.cursor = ''

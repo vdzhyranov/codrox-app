@@ -1,4 +1,4 @@
-export type TabType = 'claude' | 'terminal' | 'editor'
+export type TabType = 'claude' | 'terminal' | 'editor' | 'browser'
 
 export interface TabBase {
   id: string
@@ -23,7 +23,12 @@ export interface ClaudeTab extends TabBase {
   ptyId: string
 }
 
-export type Tab = EditorTab | TerminalTab | ClaudeTab
+export interface BrowserTab extends TabBase {
+  type: 'browser'
+  url: string
+}
+
+export type Tab = EditorTab | TerminalTab | ClaudeTab | BrowserTab
 
 // ── Pane tree types ──────────────────────────────────────────────────────────
 

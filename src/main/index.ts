@@ -21,6 +21,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webviewTag: true,
     },
   });
 
@@ -34,7 +35,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    mainWindow.webContents.send('browser:open-url', { url: details.url });
     return { action: "deny" };
   });
 

@@ -3,7 +3,6 @@ import { usePTY } from '@renderer/hooks/usePTY'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { FileViewer } from '@renderer/components/FileViewer'
 import { AgentOutputViewer } from '@renderer/components/AgentOutputViewer'
-
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface PaneLeaf {
@@ -411,6 +410,10 @@ function SplitPane({
       const totalSize = isH ? rect.width : rect.height
       const startOffset = isH ? rect.left : rect.top
 
+      const overlay = document.createElement('div')
+      overlay.style.cssText = `position:fixed;inset:0;z-index:9999;cursor:${isH ? 'col-resize' : 'row-resize'};`
+      document.body.appendChild(overlay)
+
       const onMouseMove = (me: MouseEvent): void => {
         const pos = isH ? me.clientX : me.clientY
         const newRatio = (pos - startOffset) / totalSize
@@ -418,6 +421,7 @@ function SplitPane({
       }
 
       const onMouseUp = (): void => {
+        overlay.remove()
         document.removeEventListener('mousemove', onMouseMove)
         document.removeEventListener('mouseup', onMouseUp)
         document.body.style.cursor = ''
@@ -536,11 +540,12 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
   const addPanel = useCallback(
     (type: 'claude' | 'terminal') => {
       const id = `${type}-${Date.now()}`
+      const titles = { claude: 'Claude', terminal: 'Terminal' }
       const newLeaf: PaneLeaf = {
         type: 'leaf',
         id,
         panelType: type,
-        title: type === 'claude' ? 'Claude' : 'Terminal',
+        title: titles[type],
         sessionName: makeSessionName(id),
       }
 
@@ -608,6 +613,10 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
     const containerHeight = container.getBoundingClientRect().height
     const startSplit = topBottomSplit
 
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:row-resize;'
+    document.body.appendChild(overlay)
+
     const onMouseMove = (me: MouseEvent): void => {
       const currentY = me.clientY
       const offset = currentY - container.getBoundingClientRect().top
@@ -616,6 +625,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
     }
 
     const onMouseUp = (): void => {
+      overlay.remove()
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
       document.body.style.cursor = ''

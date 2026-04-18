@@ -1,10 +1,13 @@
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { FileTree } from '@renderer/components/FileTree'
 import { GitChanges } from '@renderer/components/GitChanges'
 import { AgentList } from '@renderer/components/AgentList'
+import { BrowserTabs } from '@renderer/components/BrowserTabs'
+
+type RightPanelMode = 'panel' | 'browser'
 
 function CollapsibleSectionHeader({
   label,
@@ -78,10 +81,25 @@ export function RightPanel(): JSX.Element {
     activeWorktreePath ? s.treeByWorktree[activeWorktreePath] : null
   )
 
+  const [mode, setMode] = useState<RightPanelMode>('panel')
   const [filesCollapsed, setFilesCollapsed] = useState(false)
   const [agentsCollapsed, setAgentsCollapsed] = useState(false)
 
   const fileCount = tree?.children?.length ?? 0
+
+  // Auto-switch to browser when a link is opened
+  const switchToBrowser = useCallback(() => setMode('browser'), [])
+  const switchToPanel = useCallback(() => setMode('panel'), [])
+
+  useEffect(() => {
+    const handler = (): void => switchToBrowser()
+    window.addEventListener('open-in-browser', handler)
+    const unsubIpc = window.api.on('browser:open-url', () => switchToBrowser())
+    return () => {
+      window.removeEventListener('open-in-browser', handler)
+      unsubIpc()
+    }
+  }, [switchToBrowser])
 
   return (
     <div
@@ -94,8 +112,47 @@ export function RightPanel(): JSX.Element {
         overflow: 'hidden',
       }}
     >
-      {activeWorktreePath ? (
+      {mode === 'browser' ? (
+        <BrowserTabs onSwitchToPanel={switchToPanel} />
+      ) : activeWorktreePath ? (
         <>
+          {/* Mode switch header */}
+          <div
+            style={{
+              height: 32,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'stretch',
+              background: 'var(--surface)',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            <button
+              onClick={switchToBrowser}
+              title="Switch to Browser"
+              style={{
+                width: 28,
+                flexShrink: 0,
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'var(--surface2)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)'; e.currentTarget.style.background = 'transparent' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+            </button>
+          </div>
+
           {/* Agents section */}
           <div style={{ flexShrink: 0 }}>
             <CollapsibleSectionHeader
