@@ -21,6 +21,12 @@ export function initAutoUpdater(win: BrowserWindow): void {
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.forceDevUpdateConfig = false
+
+  // Allow updates for unsigned builds (no code signing yet)
+  if (process.platform === 'darwin') {
+    autoUpdater.allowDowngrade = false
+  }
 
   autoUpdater.on('checking-for-update', () => {
     send({ state: 'checking' })

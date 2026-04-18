@@ -143,7 +143,7 @@ function UpdateBanner({ status }: { status: UpdateStatus }): JSX.Element | null 
     actionLabel = 'Restart'
     color = 'var(--green)'
   } else if (status.state === 'error') {
-    message = 'Update failed'
+    message = `Update failed: ${status.message}`
     color = 'var(--red)'
   }
 
