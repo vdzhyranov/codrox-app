@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "bin": {
@@ -42,7 +42,10 @@
       "private": true
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "resources/entitlements.mac.plist",

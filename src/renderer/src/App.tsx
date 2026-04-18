@@ -5,6 +5,7 @@ import { RightPanel } from '@renderer/layout/RightPanel'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import type { SessionData } from '@shared/types'
+import logoImg from '@renderer/assets/logo.png'
 
 // ── ResizeHandle ────────────────────────────────────────────────────────────
 
@@ -212,18 +213,8 @@ function TitleBar(): JSX.Element {
       } as React.CSSProperties}
     >
       {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <span
-          style={{
-            fontFamily: 'var(--sans)',
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: '0.05em',
-            color: 'var(--text)',
-          }}
-        >
-          COD<em style={{ color: 'var(--accent2)', fontStyle: 'normal' }}>ROX</em>
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <img src={logoImg} alt="Codrox" style={{ height: 18 }} draggable={false} />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }} />
