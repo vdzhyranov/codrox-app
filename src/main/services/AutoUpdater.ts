@@ -25,9 +25,7 @@ export function initAutoUpdater(win: BrowserWindow): void {
   // Authenticate for private GitHub repo (token injected at build time)
   declare const __GH_UPDATE_TOKEN__: string
   if (__GH_UPDATE_TOKEN__) {
-    autoUpdater.requestHeaders = {
-      Authorization: `token ${__GH_UPDATE_TOKEN__}`,
-    }
+    process.env.GH_TOKEN = __GH_UPDATE_TOKEN__
   }
 
   autoUpdater.on('checking-for-update', () => {
