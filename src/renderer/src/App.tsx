@@ -204,7 +204,7 @@ function TitleBar(): JSX.Element {
         height: 40,
         display: 'flex',
         alignItems: 'center',
-        padding: '0 16px 0 78px',
+        padding: '0 16px 0 90px',
         gap: 16,
         background: 'var(--bg)',
         borderBottom: '1px solid var(--border)',
