@@ -7,6 +7,7 @@ const TAB_CONFIG: Record<string, { dot: string; label: string }> = {
   claude: { dot: '#a78bfa', label: 'Claude' },
   terminal: { dot: '#3ecf8e', label: 'Terminal' },
   editor: { dot: '#60a5fa', label: 'Editor' },
+  browser: { dot: '#60a5fa', label: 'Browser' },
 }
 
 export function TabBar(): JSX.Element {
