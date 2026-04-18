@@ -60,7 +60,6 @@ jobs:
         run: npm run ${{ matrix.build_cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_UPDATE_TOKEN: ${{ secrets.GH_UPDATE_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

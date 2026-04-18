@@ -83,113 +83,6 @@ function ResizeHandle({ onResize }: ResizeHandleProps): JSX.Element {
   )
 }
 
-// ── Update Banner ──────────────────────────────────────────────────────────
-
-type UpdateStatus =
-  | { state: 'idle' }
-  | { state: 'checking' }
-  | { state: 'available'; version: string }
-  | { state: 'not-available' }
-  | { state: 'error'; message: string }
-
-function useUpdateStatus(): UpdateStatus {
-  const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' })
-
-  useEffect(() => {
-    const unsub = window.api.on('updater:status', (data: unknown) => {
-      setStatus(data as UpdateStatus)
-    })
-    return unsub
-  }, [])
-
-  return status
-}
-
-function UpdateBanner({ status }: { status: UpdateStatus }): JSX.Element | null {
-  const [dismissed, setDismissed] = useState(false)
-  const [hovered, setHovered] = useState(false)
-
-  const [copied, setCopied] = useState(false)
-
-  // Reset dismissed when a new version is detected
-  useEffect(() => {
-    if (status.state === 'available') {
-      setDismissed(false)
-      setCopied(false)
-    }
-  }, [status.state])
-
-  if (dismissed) return null
-  if (status.state === 'idle' || status.state === 'checking' || status.state === 'not-available') return null
-
-  const updateCmd = 'npm i -g github:vdzhyranov/codrox-app'
-
-  const handleCopy = (): void => {
-    window.api.clipboardWriteText(updateCmd)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const color = status.state === 'error' ? 'var(--red)' : 'var(--accent)'
-  const message =
-    status.state === 'available'
-      ? `Update v${status.version} available`
-      : `Update check failed: ${(status as { message: string }).message}`
-
-  return (
-    <div
-      style={{
-        height: 28,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        background: `color-mix(in srgb, ${color} 10%, transparent)`,
-        borderBottom: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
-        flexShrink: 0,
-        fontSize: 11,
-        color: 'var(--text2)',
-      }}
-    >
-      <span>{message}</span>
-      {status.state === 'available' && (
-        <button
-          onClick={handleCopy}
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          style={{
-            background: hovered ? color : 'transparent',
-            border: `1px solid ${color}`,
-            borderRadius: 4,
-            color: hovered ? '#fff' : color,
-            fontSize: 10,
-            padding: '1px 8px',
-            cursor: 'pointer',
-            fontFamily: 'var(--mono)',
-            transition: 'all .12s',
-          }}
-        >
-          {copied ? 'Copied!' : 'Copy update cmd'}
-        </button>
-      )}
-      <button
-        onClick={() => setDismissed(true)}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--text3)',
-          fontSize: 12,
-          lineHeight: 1,
-          padding: '0 2px',
-        }}
-      >
-        x
-      </button>
-    </div>
-  )
-}
-
 // ── TitleBar ────────────────────────────────────────────────────────────────
 
 function TitleBar(): JSX.Element {
@@ -245,19 +138,6 @@ function TitleBar(): JSX.Element {
           {activeWorkspace.name}
         </span>
       )}
-
-      {/* Version badge */}
-      <span
-        style={{
-          fontSize: 9,
-          color: 'var(--text3)',
-          fontFamily: 'var(--mono)',
-          opacity: 0.6,
-          flexShrink: 0,
-        }}
-      >
-        v{__APP_VERSION__}
-      </span>
     </div>
   )
 }
@@ -273,7 +153,6 @@ const RIGHT_MIN = 10
 const MAIN_MIN = 30
 
 function App(): JSX.Element {
-  const updateStatus = useUpdateStatus()
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
   const setActiveWorktree = useWorkspaceStore((s) => s.setActiveWorktree)
@@ -387,7 +266,6 @@ function App(): JSX.Element {
       }}
     >
       <TitleBar />
-      <UpdateBanner status={updateStatus} />
       <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Column 1: Activity bar — fixed 48px, outside the percentage system */}
         <div style={{ width: 48, minWidth: 48, flexShrink: 0, height: '100%' }}>
