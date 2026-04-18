@@ -83,6 +83,126 @@ function ResizeHandle({ onResize }: ResizeHandleProps): JSX.Element {
   )
 }
 
+// ── Update Banner ──────────────────────────────────────────────────────────
+
+type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; version: string }
+  | { state: 'not-available' }
+  | { state: 'downloading'; percent: number }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string }
+
+function useUpdateStatus(): UpdateStatus {
+  const [status, setStatus] = useState<UpdateStatus>({ state: 'idle' })
+
+  useEffect(() => {
+    const unsub = window.api.on('updater:status', (data: unknown) => {
+      setStatus(data as UpdateStatus)
+    })
+    return unsub
+  }, [])
+
+  return status
+}
+
+function UpdateBanner({ status }: { status: UpdateStatus }): JSX.Element | null {
+  const [dismissed, setDismissed] = useState(false)
+  const [hovered, setHovered] = useState(false)
+
+  // Reset dismissed when status changes to a new actionable state
+  useEffect(() => {
+    if (status.state === 'available' || status.state === 'downloaded') {
+      setDismissed(false)
+    }
+  }, [status.state])
+
+  if (dismissed) return null
+  if (status.state === 'idle' || status.state === 'checking' || status.state === 'not-available') return null
+
+  const handleAction = (): void => {
+    if (status.state === 'available') {
+      window.api.invoke('updater:download')
+    } else if (status.state === 'downloaded') {
+      window.api.invoke('updater:install')
+    }
+  }
+
+  let message = ''
+  let actionLabel = ''
+  let color = 'var(--accent)'
+
+  if (status.state === 'available') {
+    message = `Update v${status.version} available`
+    actionLabel = 'Download'
+  } else if (status.state === 'downloading') {
+    message = `Downloading update... ${status.percent}%`
+  } else if (status.state === 'downloaded') {
+    message = `Update v${status.version} ready`
+    actionLabel = 'Restart'
+    color = 'var(--green)'
+  } else if (status.state === 'error') {
+    message = 'Update failed'
+    color = 'var(--red)'
+  }
+
+  return (
+    <div
+      style={{
+        height: 28,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        background: `color-mix(in srgb, ${color} 10%, transparent)`,
+        borderBottom: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
+        flexShrink: 0,
+        fontSize: 11,
+        color: 'var(--text2)',
+      }}
+    >
+      <span>{message}</span>
+      {actionLabel && (
+        <button
+          onClick={handleAction}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            background: hovered ? color : 'transparent',
+            border: `1px solid ${color}`,
+            borderRadius: 4,
+            color: hovered ? '#fff' : color,
+            fontSize: 10,
+            padding: '1px 8px',
+            cursor: 'pointer',
+            fontFamily: 'var(--mono)',
+            transition: 'all .12s',
+          }}
+        >
+          {actionLabel}
+        </button>
+      )}
+      {status.state !== 'downloading' && (
+        <button
+          onClick={() => setDismissed(true)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text3)',
+            fontSize: 12,
+            lineHeight: 1,
+            padding: '0 2px',
+          }}
+        >
+          x
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── TitleBar ────────────────────────────────────────────────────────────────
 
 function TitleBar(): JSX.Element {
@@ -153,6 +273,7 @@ const RIGHT_MIN = 10
 const MAIN_MIN = 30
 
 function App(): JSX.Element {
+  const updateStatus = useUpdateStatus()
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
   const setActiveWorktree = useWorkspaceStore((s) => s.setActiveWorktree)
@@ -266,6 +387,7 @@ function App(): JSX.Element {
       }}
     >
       <TitleBar />
+      <UpdateBanner status={updateStatus} />
       <div ref={containerRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Column 1: Activity bar — fixed 48px, outside the percentage system */}
         <div style={{ width: 48, minWidth: 48, flexShrink: 0, height: '100%' }}>

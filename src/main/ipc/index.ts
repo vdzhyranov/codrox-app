@@ -5,6 +5,7 @@ import { register as registerFilesystem } from './filesystem.ipc'
 import { register as registerGit } from './git.ipc'
 import { register as registerSubAgents } from './subagents.ipc'
 import { register as registerLinear } from './linear.ipc'
+import { register as registerUpdater } from './updater.ipc'
 let registered = false
 
 export function registerAllHandlers(mainWindow: BrowserWindow): void {
@@ -16,4 +17,5 @@ export function registerAllHandlers(mainWindow: BrowserWindow): void {
   registerGit(ipcMain, mainWindow)
   registerSubAgents(ipcMain, mainWindow)
   registerLinear(ipcMain, mainWindow)
+  registerUpdater(ipcMain, mainWindow)
 }
