@@ -258,6 +258,19 @@ function TitleBar(): JSX.Element {
           {activeWorkspace.name}
         </span>
       )}
+
+      {/* Version badge */}
+      <span
+        style={{
+          fontSize: 9,
+          color: 'var(--text3)',
+          fontFamily: 'var(--mono)',
+          opacity: 0.6,
+          flexShrink: 0,
+        }}
+      >
+        v{__APP_VERSION__}
+      </span>
     </div>
   )
 }

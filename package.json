@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
@@ -35,7 +35,8 @@
     "publish": {
       "provider": "github",
       "owner": "vdzhyranov",
-      "repo": "codrox-app"
+      "repo": "codrox-app",
+      "private": true
     },
     "mac": {
       "target": ["dmg", "zip"],
