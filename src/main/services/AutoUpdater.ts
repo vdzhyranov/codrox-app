@@ -21,11 +21,13 @@ export function initAutoUpdater(win: BrowserWindow): void {
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.forceDevUpdateConfig = false
 
-  // Allow updates for unsigned builds (no code signing yet)
-  if (process.platform === 'darwin') {
-    autoUpdater.allowDowngrade = false
+  // Authenticate for private GitHub repo (token injected at build time)
+  declare const __GH_UPDATE_TOKEN__: string
+  if (__GH_UPDATE_TOKEN__) {
+    autoUpdater.requestHeaders = {
+      Authorization: `token ${__GH_UPDATE_TOKEN__}`,
+    }
   }
 
   autoUpdater.on('checking-for-update', () => {
