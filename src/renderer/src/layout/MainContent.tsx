@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { DirectoryPicker } from '@renderer/components/DirectoryPicker'
+import logoImg from '@renderer/assets/logo.png'
 import { WorkspaceView } from '@renderer/components/WorkspaceView'
 import {
   ModePicker,
@@ -170,11 +171,8 @@ export function MainContent(): JSX.Element {
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 32, background: 'var(--bg)' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 12 }}>
-            <span style={{ color: 'var(--accent)', fontSize: 28 }}>◈</span>
-            <h1 style={{ fontFamily: 'var(--sans)', fontSize: 28, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--text)' }}>
-              COD<em style={{ color: 'var(--accent2)', fontStyle: 'normal' }}>ROX</em>
-            </h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <img src={logoImg} alt="Codrox" style={{ height: 40 }} draggable={false} />
           </div>
           <p style={{ fontSize: 12, color: 'var(--text3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             AI-Native Development Environment
