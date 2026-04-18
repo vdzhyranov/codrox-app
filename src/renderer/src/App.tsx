@@ -90,8 +90,6 @@ type UpdateStatus =
   | { state: 'checking' }
   | { state: 'available'; version: string }
   | { state: 'not-available' }
-  | { state: 'downloading'; percent: number }
-  | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string }
 
 function useUpdateStatus(): UpdateStatus {
@@ -111,41 +109,32 @@ function UpdateBanner({ status }: { status: UpdateStatus }): JSX.Element | null 
   const [dismissed, setDismissed] = useState(false)
   const [hovered, setHovered] = useState(false)
 
-  // Reset dismissed when status changes to a new actionable state
+  const [copied, setCopied] = useState(false)
+
+  // Reset dismissed when a new version is detected
   useEffect(() => {
-    if (status.state === 'available' || status.state === 'downloaded') {
+    if (status.state === 'available') {
       setDismissed(false)
+      setCopied(false)
     }
   }, [status.state])
 
   if (dismissed) return null
   if (status.state === 'idle' || status.state === 'checking' || status.state === 'not-available') return null
 
-  const handleAction = (): void => {
-    if (status.state === 'available') {
-      window.api.invoke('updater:download')
-    } else if (status.state === 'downloaded') {
-      window.api.invoke('updater:install')
-    }
+  const updateCmd = 'npm i -g github:vdzhyranov/codrox-app'
+
+  const handleCopy = (): void => {
+    window.api.clipboardWriteText(updateCmd)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  let message = ''
-  let actionLabel = ''
-  let color = 'var(--accent)'
-
-  if (status.state === 'available') {
-    message = `Update v${status.version} available`
-    actionLabel = 'Download'
-  } else if (status.state === 'downloading') {
-    message = `Downloading update... ${status.percent}%`
-  } else if (status.state === 'downloaded') {
-    message = `Update v${status.version} ready`
-    actionLabel = 'Restart'
-    color = 'var(--green)'
-  } else if (status.state === 'error') {
-    message = `Update failed: ${status.message}`
-    color = 'var(--red)'
-  }
+  const color = status.state === 'error' ? 'var(--red)' : 'var(--accent)'
+  const message =
+    status.state === 'available'
+      ? `Update v${status.version} available`
+      : `Update check failed: ${(status as { message: string }).message}`
 
   return (
     <div
@@ -163,9 +152,9 @@ function UpdateBanner({ status }: { status: UpdateStatus }): JSX.Element | null 
       }}
     >
       <span>{message}</span>
-      {actionLabel && (
+      {status.state === 'available' && (
         <button
-          onClick={handleAction}
+          onClick={handleCopy}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
@@ -180,25 +169,23 @@ function UpdateBanner({ status }: { status: UpdateStatus }): JSX.Element | null 
             transition: 'all .12s',
           }}
         >
-          {actionLabel}
+          {copied ? 'Copied!' : 'Copy update cmd'}
         </button>
       )}
-      {status.state !== 'downloading' && (
-        <button
-          onClick={() => setDismissed(true)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text3)',
-            fontSize: 12,
-            lineHeight: 1,
-            padding: '0 2px',
-          }}
-        >
-          x
-        </button>
-      )}
+      <button
+        onClick={() => setDismissed(true)}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'var(--text3)',
+          fontSize: 12,
+          lineHeight: 1,
+          padding: '0 2px',
+        }}
+      >
+        x
+      </button>
     </div>
   )
 }
