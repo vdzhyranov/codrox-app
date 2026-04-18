@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "postinstall": "npx @electron/rebuild",
-    "prepare": "electron-vite build",
+    "prepare": "npx electron-vite build",
     "dist": "electron-builder"
   },
   "build": {
