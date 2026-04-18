@@ -67,7 +67,9 @@ jobs:
           name: release-${{ matrix.os }}
           path: |
             dist/*.dmg
+            dist/*.dmg.blockmap
             dist/*.zip
+            dist/*.zip.blockmap
             dist/*.AppImage
             dist/*.deb
             dist/*.yml

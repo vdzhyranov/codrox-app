@@ -32,8 +32,13 @@
       "!{karma.conf.js,.babelrc,.babelrc.js,jest.config.js,.mocharc.yml}",
       "!src/**"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "vdzhyranov",
+      "repo": "codrox-app"
+    },
     "mac": {
-      "target": "dmg",
+      "target": ["dmg", "zip"],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "resources/entitlements.mac.plist",
@@ -59,6 +64,7 @@
     "@xterm/xterm": "^6.0.0",
     "better-sqlite3": "^12.8.0",
     "codemirror": "^6.0.2",
+    "electron-updater": "^6.8.3",
     "marked": "^17.0.6",
     "node-pty": "^1.1.0",
     "react": "^19.2.4",

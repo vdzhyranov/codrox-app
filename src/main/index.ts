@@ -4,6 +4,7 @@ import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerAllHandlers } from "./ipc";
+import { initAutoUpdater } from "./services/AutoUpdater";
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -26,6 +27,7 @@ function createWindow(): void {
   });
 
   registerAllHandlers(mainWindow);
+  initAutoUpdater(mainWindow);
 
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
