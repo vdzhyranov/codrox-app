@@ -3,6 +3,7 @@ import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useSidebarStore } from '@renderer/store/sidebarStore'
 import { useLinearStore } from '@renderer/store/linearStore'
 import { CreateTaskModal } from '@renderer/components/CreateTaskModal'
+import { LinearSetupModal } from '@renderer/components/LinearSetupModal'
 import type { Workspace, Worktree, LinearTask } from '@shared/types'
 
 // Stable color palette for workspace dots
@@ -19,7 +20,7 @@ function getDotColor(index: number): string {
   return DOT_COLORS[index % DOT_COLORS.length]
 }
 
-type SidebarView = 'explorer' | 'settings'
+type SidebarView = 'explorer' | 'settings' | 'extensions'
 
 
 // ── Activity Bar ──────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ export function ActivityBar(): JSX.Element {
 
   const items: { id: SidebarView; icon: string; label: string }[] = [
     { id: 'explorer', icon: '◈', label: 'Explorer' },
+    { id: 'extensions', icon: '⧉', label: 'Extensions' },
     { id: 'settings', icon: '⚙', label: 'Settings' },
   ]
 
@@ -825,25 +827,16 @@ function LinearSection(): JSX.Element {
   const isLoading = useLinearStore((s) => s.isLoading)
   const error = useLinearStore((s) => s.error)
   const lastFetched = useLinearStore((s) => s.lastFetched)
-  const authenticate = useLinearStore((s) => s.authenticate)
   const checkAuth = useLinearStore((s) => s.checkAuth)
   const fetchTasks = useLinearStore((s) => s.fetchTasks)
   const setSelectedTeam = useLinearStore((s) => s.setSelectedTeam)
+  const setActiveView = useSidebarStore((s) => s.setActiveView)
 
   const [collapsed, setCollapsed] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [connectHovered, setConnectHovered] = useState(false)
-  const [apiKey, setApiKey] = useState('')
 
   useEffect(() => {
     checkAuth()
-    // Load stored API key (masked — just to know one exists)
-    window.api.invoke('linear:getApiKey', undefined)
-      .then((result) => {
-        const r = result as { apiKey: string }
-        if (r.apiKey) setApiKey(r.apiKey)
-      })
-      .catch(() => {})
   }, [])
 
   const timeSince = lastFetched
@@ -928,61 +921,22 @@ function LinearSection(): JSX.Element {
       {!collapsed && (
         <>
           {!isAuthenticated ? (
-            <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <label style={{ fontSize: 9, color: 'var(--text3)', letterSpacing: '0.06em' }}>
-                  API KEY
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && apiKey.trim()) authenticate(apiKey.trim())
-                  }}
-                  placeholder="lin_api_..."
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    fontSize: 10,
-                    background: 'var(--surface2)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    color: 'var(--text)',
-                    fontFamily: 'var(--mono)',
-                    outline: 'none',
-                  }}
-                />
-                <span style={{ fontSize: 8, color: 'var(--text3)', lineHeight: 1.4 }}>
-                  Linear Settings &gt; Account &gt; API &gt; Personal API keys
-                </span>
-              </div>
-              <button
-                onClick={() => authenticate(apiKey.trim())}
-                disabled={isLoading || !apiKey.trim()}
-                onMouseEnter={() => setConnectHovered(true)}
-                onMouseLeave={() => setConnectHovered(false)}
+            <div style={{ padding: '8px 14px' }}>
+              <span
+                onClick={() => setActiveView('extensions')}
                 style={{
-                  width: '100%',
-                  padding: '6px 12px',
-                  fontSize: 11,
-                  background: connectHovered && apiKey.trim() ? 'var(--accent)' : 'var(--accent-dim)',
-                  border: '1px solid var(--accent)',
-                  borderRadius: 5,
-                  color: connectHovered && apiKey.trim() ? '#fff' : 'var(--accent2)',
-                  cursor: isLoading || !apiKey.trim() ? 'not-allowed' : 'pointer',
-                  fontFamily: 'var(--mono)',
-                  opacity: isLoading || !apiKey.trim() ? 0.6 : 1,
-                  transition: 'all .12s',
+                  fontSize: 10,
+                  color: 'var(--accent2)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  textDecorationColor: 'transparent',
+                  transition: 'text-decoration-color .12s',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.textDecorationColor = 'var(--accent2)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.textDecorationColor = 'transparent' }}
               >
-                {isLoading ? 'Connecting...' : 'Connect Linear'}
-              </button>
-              {error && (
-                <span style={{ fontSize: 9, color: 'var(--red)', display: 'block' }}>
-                  {error}
-                </span>
-              )}
+                Connect in Extensions
+              </span>
             </div>
           ) : (
             <>
@@ -1636,6 +1590,150 @@ function SettingsView(): JSX.Element {
   )
 }
 
+// ── Extensions view ──────────────────────────────────────────────────────────
+
+function ExtensionsView(): JSX.Element {
+  const isAuthenticated = useLinearStore((s) => s.isAuthenticated)
+  const user = useLinearStore((s) => s.user)
+  const checkAuth = useLinearStore((s) => s.checkAuth)
+  const disconnect = useLinearStore((s) => s.disconnect)
+
+  const [showSetupModal, setShowSetupModal] = useState(false)
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflowY: 'auto',
+        padding: '12px 0',
+      }}
+    >
+      {/* Header */}
+      <div style={{ padding: '0 14px 12px' }}>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: '0.12em',
+            color: 'var(--text3)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Extensions
+        </span>
+      </div>
+
+      {/* Linear card */}
+      <div
+        style={{
+          margin: '0 14px',
+          padding: 12,
+          background: 'var(--surface2)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>◫</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Linear</div>
+              <div style={{ fontSize: 9, color: 'var(--text3)' }}>Issue tracking</div>
+            </div>
+          </div>
+          {isAuthenticated && (
+            <span
+              style={{
+                fontSize: 8,
+                color: 'var(--green)',
+                background: 'rgba(62,207,142,.12)',
+                padding: '2px 6px',
+                borderRadius: 3,
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+              }}
+            >
+              Connected
+            </span>
+          )}
+        </div>
+
+        {isAuthenticated ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 10, color: 'var(--text2)' }}>
+              Signed in as {user?.displayName || user?.name || user?.email}
+            </span>
+            <button
+              onClick={() => disconnect()}
+              style={{
+                width: '100%',
+                padding: '5px 12px',
+                fontSize: 10,
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                color: 'var(--text3)',
+                cursor: 'pointer',
+                fontFamily: 'var(--mono)',
+                transition: 'all .12s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--red)'
+                e.currentTarget.style.color = 'var(--red)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.color = 'var(--text3)'
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowSetupModal(true)}
+            style={{
+              width: '100%',
+              padding: '6px 12px',
+              fontSize: 11,
+              background: 'var(--accent-dim)',
+              border: '1px solid var(--accent)',
+              borderRadius: 5,
+              color: 'var(--accent2)',
+              cursor: 'pointer',
+              fontFamily: 'var(--mono)',
+              transition: 'all .12s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--accent)'
+              e.currentTarget.style.color = '#fff'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--accent-dim)'
+              e.currentTarget.style.color = 'var(--accent2)'
+            }}
+          >
+            Connect
+          </button>
+        )}
+      </div>
+
+      {showSetupModal && (
+        <LinearSetupModal onClose={() => setShowSetupModal(false)} />
+      )}
+    </div>
+  )
+}
+
 // ── SidebarContent export (workspace list / settings panel, no activity bar) ──
 
 export function SidebarContent(): JSX.Element {
@@ -1662,6 +1760,7 @@ export function SidebarContent(): JSX.Element {
       }}
     >
       {activeView === 'explorer' && <ExplorerView onAddWorkspace={handleAddWorkspace} />}
+      {activeView === 'extensions' && <ExtensionsView />}
       {activeView === 'settings' && <SettingsView />}
     </div>
   )

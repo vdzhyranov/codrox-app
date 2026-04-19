@@ -3,21 +3,17 @@ import { linearService } from '../services/LinearService'
 import type { CreateTaskInput } from '@shared/types/linear'
 
 export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
-  ipcMain.handle('linear:auth', async (_event, payload: { apiKey: string }) => {
-    return linearService.authenticate(payload.apiKey)
-  })
-
-  ipcMain.handle('linear:logout', async () => {
-    await linearService.logout()
-    return { success: true }
-  })
-
   ipcMain.handle('linear:status', async () => {
     return linearService.getAuthStatus()
   })
 
-  ipcMain.handle('linear:getApiKey', async () => {
-    return { apiKey: linearService.getStoredApiKey() }
+  ipcMain.handle('linear:setup', async (_event, payload: { apiKey: string }) => {
+    return linearService.setup(payload.apiKey)
+  })
+
+  ipcMain.handle('linear:disconnect', async () => {
+    await linearService.disconnect()
+    return { success: true }
   })
 
   ipcMain.handle('linear:fetchTasks', async (_event, payload?: { teamId?: string }) => {
