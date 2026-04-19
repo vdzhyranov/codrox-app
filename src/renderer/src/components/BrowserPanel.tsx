@@ -14,11 +14,19 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [pageTitle, setPageTitle] = useState('')
+  const [devToolsOpen, setDevToolsOpen] = useState(false)
+  const [devToolsKey, setDevToolsKey] = useState(0)
+  const [devToolsHeight, setDevToolsHeight] = useState(250)
+  const [isResizing, setIsResizing] = useState(false)
+  const mainWvReady = useRef(false)
+
+  // ── Webview event listeners ────────────────────────────────────────────
 
   useEffect(() => {
     const wv = webviewRef.current
     if (!wv) return
 
+    const onReady = (): void => { mainWvReady.current = true }
     const onStartLoad = (): void => setIsLoading(true)
     const onStopLoad = (): void => {
       setIsLoading(false)
@@ -35,8 +43,6 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
       setPageTitle(e.title)
       onTitleChange?.(e.title)
     }
-
-    // Intercept links that try to open new windows — open in a new browser pane
     const onNewWindow = (e: Event): void => {
       const detail = (e as CustomEvent).detail || e
       const targetUrl = (detail as { url?: string }).url
@@ -45,6 +51,7 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
       }
     }
 
+    wv.addEventListener('dom-ready', onReady)
     wv.addEventListener('did-start-loading', onStartLoad)
     wv.addEventListener('did-stop-loading', onStopLoad)
     wv.addEventListener('did-navigate', onNavigate)
@@ -53,6 +60,7 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
     wv.addEventListener('new-window', onNewWindow)
 
     return () => {
+      wv.removeEventListener('dom-ready', onReady)
       wv.removeEventListener('did-start-loading', onStartLoad)
       wv.removeEventListener('did-stop-loading', onStopLoad)
       wv.removeEventListener('did-navigate', onNavigate)
@@ -62,18 +70,42 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
     }
   }, [])
 
+  // ── Toggle DevTools ────────────────────────────────────────────────────
+
+  const toggleDevTools = useCallback(async () => {
+    const wv = webviewRef.current
+    if (!wv || !mainWvReady.current) return
+
+    let targetId: number
+    try {
+      targetId = (wv as unknown as { getWebContentsId(): number }).getWebContentsId()
+    } catch {
+      return
+    }
+
+    if (devToolsOpen) {
+      // Close: IPC first, then unmount
+      await window.api.invoke('browser:close-devtools', { targetId })
+      setDevToolsOpen(false)
+    } else {
+      // Open: tell main to wire the NEXT webview as devtools, then mount it
+      await window.api.invoke('browser:prepare-devtools', { targetId })
+      setDevToolsKey((k) => k + 1) // fresh webview = fresh WebContents
+      setDevToolsOpen(true)
+    }
+  }, [devToolsOpen])
+
+  // ── Navigation ─────────────────────────────────────────────────────────
+
   const navigate = useCallback((targetUrl: string) => {
     const wv = webviewRef.current
     if (!wv) return
     let finalUrl = targetUrl.trim()
     if (!finalUrl) return
-    // Add protocol if missing
     if (!/^https?:\/\//i.test(finalUrl)) {
-      // If it looks like a URL (has dot), add https
       if (/^[^\s]+\.[^\s]+/.test(finalUrl)) {
         finalUrl = 'https://' + finalUrl
       } else {
-        // Treat as search query
         finalUrl = 'https://www.google.com/search?q=' + encodeURIComponent(finalUrl)
       }
     }
@@ -97,8 +129,46 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
   const goForward = useCallback(() => webviewRef.current?.goForward(), [])
   const reload = useCallback(() => webviewRef.current?.reload(), [])
 
+  // ── F12 / Cmd+Shift+I ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'F12' || (e.metaKey && e.shiftKey && e.key === 'i')) {
+        e.preventDefault()
+        toggleDevTools()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [toggleDevTools])
+
+  // ── Resize handle ──────────────────────────────────────────────────────
+
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      setIsResizing(true)
+      const startY = e.clientY
+      const startH = devToolsHeight
+
+      const onMove = (ev: MouseEvent): void => {
+        setDevToolsHeight(Math.max(80, Math.min(600, startH + (startY - ev.clientY))))
+      }
+      const onUp = (): void => {
+        setIsResizing(false)
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    },
+    [devToolsHeight]
+  )
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg)', position: 'relative' }}>
       {/* Navigation bar */}
       <div
         style={{
@@ -112,21 +182,18 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
           borderBottom: '1px solid var(--border)',
         }}
       >
-        {/* Back */}
         <NavButton onClick={goBack} disabled={!canGoBack} title="Back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </NavButton>
 
-        {/* Forward */}
         <NavButton onClick={goForward} disabled={!canGoForward} title="Forward">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </NavButton>
 
-        {/* Reload / Stop */}
         <NavButton onClick={reload} title={isLoading ? 'Stop' : 'Reload'}>
           {isLoading ? (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -141,7 +208,6 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
           )}
         </NavButton>
 
-        {/* URL input */}
         <input
           ref={inputRef}
           type="text"
@@ -164,6 +230,22 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
             minWidth: 0,
           }}
         />
+
+        <NavButton onClick={toggleDevTools} title="Toggle DevTools (F12)">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={devToolsOpen ? '#60a5fa' : 'currentColor'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        </NavButton>
       </div>
 
       {/* Loading indicator */}
@@ -184,18 +266,45 @@ export function BrowserPanel({ initialUrl = 'https://www.google.com', onTitleCha
         </div>
       )}
 
-      {/* Webview */}
-      <webview
-        ref={webviewRef}
-        src={initialUrl}
-        style={{
-          flex: 1,
-          border: 'none',
-          minHeight: 0,
-        }}
-        // @ts-expect-error Electron webview attributes not in React types
-        allowpopups="true"
-      />
+      {/* Main content: webview + inline Chrome DevTools */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+        {/* Page webview */}
+        <webview
+          ref={webviewRef}
+          src={initialUrl}
+          style={{ flex: 1, border: 'none', minHeight: 0 }}
+          // @ts-expect-error Electron webview attributes not in React types
+          allowpopups="true"
+        />
+
+        {/* Resize overlay — prevents webview stealing mouse during drag */}
+        {isResizing && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'row-resize' }} />
+        )}
+
+        {/* Inline DevTools */}
+        {devToolsOpen && (
+          <>
+            <div
+              onMouseDown={onResizeStart}
+              style={{
+                height: 4,
+                flexShrink: 0,
+                cursor: 'row-resize',
+                background: isResizing ? 'var(--accent)' : 'var(--border)',
+                transition: isResizing ? 'none' : 'background .15s',
+              }}
+              onMouseEnter={(e) => { if (!isResizing) e.currentTarget.style.background = 'var(--accent)' }}
+              onMouseLeave={(e) => { if (!isResizing) e.currentTarget.style.background = 'var(--border)' }}
+            />
+            <webview
+              key={devToolsKey}
+              src="about:blank"
+              style={{ height: devToolsHeight, flexShrink: 0, border: 'none' }}
+            />
+          </>
+        )}
+      </div>
     </div>
   )
 }
