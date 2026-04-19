@@ -22,8 +22,8 @@ interface LinearState {
 
 interface LinearActions {
   checkAuth: () => Promise<void>
-  authenticate: (apiKey: string) => Promise<void>
-  logout: () => Promise<void>
+  setup: (apiKey: string) => Promise<void>
+  disconnect: () => Promise<void>
   fetchTasks: (teamId?: string) => Promise<void>
   fetchTeams: () => Promise<void>
   createTask: (input: CreateTaskInput) => Promise<LinearTask>
@@ -63,27 +63,24 @@ export const useLinearStore = create<LinearStore>((set, get) => ({
     }
   },
 
-  authenticate: async (apiKey: string) => {
+  setup: async (apiKey: string) => {
     set({ isLoading: true, error: null })
     try {
-      const result = (await window.api.invoke('linear:auth', { apiKey })) as {
+      const result = (await window.api.invoke('linear:setup', { apiKey })) as {
         success: boolean
-        user: LinearUser | null
+        user: LinearUser
       }
-      if (result.success) {
-        set({ isAuthenticated: true, user: result.user, isLoading: false })
-        get().fetchTeams().catch(() => {})
-        get().fetchTasks().catch(() => {})
-      } else {
-        set({ isLoading: false, error: 'Authentication failed' })
-      }
+      set({ isAuthenticated: true, user: result.user, isLoading: false })
+      get().fetchTeams().catch(() => {})
+      get().fetchTasks().catch(() => {})
     } catch (err) {
-      set({ isLoading: false, error: err instanceof Error ? err.message : 'Authentication failed' })
+      set({ isLoading: false, error: err instanceof Error ? err.message : 'Invalid API key' })
+      throw err
     }
   },
 
-  logout: async () => {
-    await window.api.invoke('linear:logout', undefined)
+  disconnect: async () => {
+    await window.api.invoke('linear:disconnect', undefined)
     set({
       isAuthenticated: false,
       user: null,

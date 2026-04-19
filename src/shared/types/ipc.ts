@@ -82,15 +82,11 @@ export interface IpcChannels {
     response: { diff: string }
   }
   // Linear integration
-  'linear:auth': {
+  'linear:setup': {
     request: { apiKey: string }
-    response: { success: boolean; user: LinearUser | null }
+    response: { success: boolean; user: LinearUser }
   }
-  'linear:getApiKey': {
-    request: void
-    response: { apiKey: string }
-  }
-  'linear:logout': {
+  'linear:disconnect': {
     request: void
     response: { success: boolean }
   }

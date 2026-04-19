@@ -1,4 +1,7 @@
-import { safeStorage } from 'electron'
+import { readFile, writeFile } from 'fs/promises'
+import { homedir } from 'os'
+import { join } from 'path'
+import { existsSync } from 'fs'
 import { persistenceService } from './PersistenceService'
 import type {
   LinearUser,
@@ -9,77 +12,109 @@ import type {
 } from '@shared/types/linear'
 
 const GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql'
+const ENV_KEY = 'CODROX_LINEAR_API_KEY'
+const EXPORT_LINE_PREFIX = `export ${ENV_KEY}=`
 
 class LinearService {
-  private apiKey: string | null = null
+  private cachedUser: LinearUser | null = null
 
-  constructor() {
-    this.loadApiKey()
-  }
-
-  // ─── API key management ──────────────────────────────────
-
-  setApiKey(apiKey: string): void {
-    this.apiKey = apiKey
-    try {
-      const encrypted = safeStorage.isEncryptionAvailable()
-      const stored = encrypted
-        ? safeStorage.encryptString(apiKey).toString('base64')
-        : apiKey
-      persistenceService.setAppState('linear_api_key', { key: stored, encrypted })
-    } catch {
-      persistenceService.setAppState('linear_api_key', { key: apiKey, encrypted: false })
-    }
-  }
-
-  getStoredApiKey(): string {
-    return this.apiKey || ''
-  }
-
-  private loadApiKey(): void {
-    try {
-      const data = persistenceService.getAppState<{ key: string; encrypted: boolean }>('linear_api_key')
-      if (!data) return
-      if (data.encrypted && safeStorage.isEncryptionAvailable()) {
-        this.apiKey = safeStorage.decryptString(Buffer.from(data.key, 'base64'))
-      } else {
-        this.apiKey = data.key
-      }
-    } catch {
-      this.apiKey = null
-    }
+  private get apiKey(): string | null {
+    return process.env[ENV_KEY] || null
   }
 
   // ─── Auth ────────────────────────────────────────────────
 
-  async authenticate(apiKey: string): Promise<{ success: boolean; user: LinearUser | null }> {
-    // Validate the key by fetching the user
-    this.apiKey = apiKey
+  async getAuthStatus(): Promise<LinearAuthState> {
+    if (!this.apiKey) {
+      this.cachedUser = null
+      return { isAuthenticated: false, user: null }
+    }
+    try {
+      if (!this.cachedUser) {
+        this.cachedUser = await this.getCurrentUser()
+      }
+      return { isAuthenticated: true, user: this.cachedUser }
+    } catch {
+      this.cachedUser = null
+      return { isAuthenticated: false, user: null }
+    }
+  }
+
+  async setup(apiKey: string): Promise<{ success: boolean; user: LinearUser }> {
+    // Validate key first
+    process.env[ENV_KEY] = apiKey
     try {
       const user = await this.getCurrentUser()
-      this.setApiKey(apiKey)
-      persistenceService.setAppState('linear_user', user)
+      this.cachedUser = user
+      // Persist to shell profile
+      await this.writeToShellProfile(apiKey)
       return { success: true, user }
     } catch (err) {
-      this.apiKey = null
+      delete process.env[ENV_KEY]
+      this.cachedUser = null
       throw new Error(
-        err instanceof Error ? err.message : 'Invalid API key. Check your token and try again.'
+        err instanceof Error ? err.message : 'Invalid API key'
       )
     }
   }
 
-  async logout(): Promise<void> {
-    this.apiKey = null
-    persistenceService.setAppState('linear_api_key', null)
-    persistenceService.setAppState('linear_user', null)
+  async disconnect(): Promise<void> {
+    await this.removeFromShellProfile()
+    delete process.env[ENV_KEY]
+    this.cachedUser = null
   }
 
-  async getAuthStatus(): Promise<LinearAuthState> {
-    if (this.apiKey) {
-      const user = persistenceService.getAppState<LinearUser>('linear_user')
-      return { isAuthenticated: true, user }
+  // ─── Shell profile helpers ──────────────────────────────
+
+  private getShellProfilePath(): string {
+    const home = homedir()
+    const shell = process.env.SHELL || '/bin/zsh'
+    if (shell.includes('zsh')) return join(home, '.zshrc')
+    if (shell.includes('bash')) {
+      // macOS uses .bash_profile, Linux uses .bashrc
+      const profile = join(home, '.bash_profile')
+      if (existsSync(profile)) return profile
+      return join(home, '.bashrc')
     }
-    return { isAuthenticated: false, user: null }
+    return join(home, '.profile')
+  }
+
+  private async writeToShellProfile(apiKey: string): Promise<void> {
+    const rcPath = this.getShellProfilePath()
+    const exportLine = `${EXPORT_LINE_PREFIX}"${apiKey}"`
+    let content = ''
+    try {
+      content = await readFile(rcPath, 'utf-8')
+    } catch {
+      // File doesn't exist yet — that's fine
+    }
+
+    // Replace existing line or append
+    const lines = content.split('\n')
+    const idx = lines.findIndex((l) => l.startsWith(EXPORT_LINE_PREFIX))
+    if (idx !== -1) {
+      lines[idx] = exportLine
+    } else {
+      // Add with a comment for clarity
+      if (content.length > 0 && !content.endsWith('\n')) lines.push('')
+      lines.push('# Codrox — Linear integration')
+      lines.push(exportLine)
+    }
+    await writeFile(rcPath, lines.join('\n'))
+  }
+
+  private async removeFromShellProfile(): Promise<void> {
+    const rcPath = this.getShellProfilePath()
+    let content: string
+    try {
+      content = await readFile(rcPath, 'utf-8')
+    } catch {
+      return
+    }
+    const lines = content.split('\n').filter(
+      (l) => !l.startsWith(EXPORT_LINE_PREFIX) && l !== '# Codrox — Linear integration'
+    )
+    await writeFile(rcPath, lines.join('\n'))
   }
 
   // ─── GraphQL helpers ─────────────────────────────────────
