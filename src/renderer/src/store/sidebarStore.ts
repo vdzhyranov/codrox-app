@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type SidebarView = 'explorer' | 'agents' | 'settings'
+type SidebarView = 'explorer' | 'agents' | 'settings' | 'extensions'
 
 interface SidebarStore {
   activeView: SidebarView
