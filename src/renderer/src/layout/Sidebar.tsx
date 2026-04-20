@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useSidebarStore } from '@renderer/store/sidebarStore'
 import { useLinearStore } from '@renderer/store/linearStore'
@@ -663,11 +663,19 @@ function WorkspaceSelector({ onAddWorkspace }: { onAddWorkspace: () => void }): 
   )
 }
 
-// ── Linear task card (draggable) ─────────────────────────────────────────────
+// ── Module-level drag data (avoids HTML5 DnD entirely) ──────────────────────
+
+let _linearDragData: { id: string; identifier: string; title: string; branchName: string } | null = null
+
+// ── Linear task card (mouse-based drag) ─────────────────────────────────────
 
 function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
   const [hovered, setHovered] = useState(false)
   const setDraggedTask = useLinearStore((s) => s.setDraggedTask)
+  const draggedTaskId = useLinearStore((s) => s.draggedTaskId)
+  const dragRef = useRef<{ startX: number; startY: number; active: boolean } | null>(null)
+
+  const isDragging = draggedTaskId === task.id
 
   const priorityLabels: Record<number, { label: string; color: string }> = {
     1: { label: '!!!', color: 'var(--red)' },
@@ -677,34 +685,84 @@ function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
   }
   const prio = priorityLabels[task.priority]
 
-  return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('application/x-linear-task', JSON.stringify({
+  const handleMouseDown = (e: React.MouseEvent): void => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, active: false }
+    let ghost: HTMLDivElement | null = null
+
+    const handleMouseMove = (me: MouseEvent): void => {
+      if (!dragRef.current) return
+      const dx = me.clientX - dragRef.current.startX
+      const dy = me.clientY - dragRef.current.startY
+      if (!dragRef.current.active && Math.abs(dx) + Math.abs(dy) > 5) {
+        dragRef.current.active = true
+        _linearDragData = {
           id: task.id,
           identifier: task.identifier,
           title: task.title,
           branchName: task.branchName,
-        }))
-        e.dataTransfer.effectAllowed = 'copy'
+        }
         setDraggedTask(task.id)
-      }}
-      onDragEnd={() => setDraggedTask(null)}
+        document.body.style.cursor = 'grabbing'
+        document.body.style.userSelect = 'none'
+
+        // Create floating ghost
+        ghost = document.createElement('div')
+        ghost.textContent = `${task.identifier}  ${task.title}`
+        ghost.style.cssText = `
+          position:fixed;pointer-events:none;z-index:9999;
+          padding:6px 10px;border-radius:6px;font-size:11px;
+          font-family:var(--mono);color:var(--text);max-width:220px;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+          background:var(--surface3);border:1px solid var(--accent);
+          box-shadow:0 4px 12px rgba(0,0,0,.4);opacity:0.9;
+        `
+        document.body.appendChild(ghost)
+      }
+      if (ghost) {
+        ghost.style.left = `${me.clientX + 12}px`
+        ghost.style.top = `${me.clientY + 12}px`
+      }
+    }
+
+    const handleMouseUp = (): void => {
+      if (ghost) {
+        ghost.remove()
+        ghost = null
+      }
+      if (dragRef.current?.active) {
+        setDraggedTask(null)
+        _linearDragData = null
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+      dragRef.current = null
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '6px 10px',
+        padding: '8px 10px',
         margin: '0 8px 4px',
         borderRadius: 6,
         border: hovered ? '1px solid var(--border2)' : '1px solid var(--border)',
         background: hovered ? 'var(--surface2)' : 'var(--surface)',
-        cursor: 'grab',
-        transition: 'all .12s',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        transition: 'border-color .12s, background .12s',
+        opacity: isDragging ? 0.5 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-        {/* state dot */}
         <div
           style={{
             width: 6,
@@ -714,7 +772,6 @@ function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
             flexShrink: 0,
           }}
         />
-        {/* identifier */}
         <span
           style={{
             fontSize: 9,
@@ -725,7 +782,6 @@ function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
         >
           {task.identifier}
         </span>
-        {/* priority */}
         {prio && (
           <span style={{ fontSize: 9, color: prio.color, fontFamily: 'var(--mono)', marginLeft: 'auto' }}>
             {prio.label}
@@ -747,58 +803,34 @@ function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
   )
 }
 
-// ── Worktree drop zone (for Linear tasks) ────────────────────────────────────
+// ── Worktree drop zone (for Linear tasks — mouse-based) ─────────────────────
 
 function WorktreeDropZone({
   onDrop,
 }: {
   onDrop: (taskData: { id: string; identifier: string; title: string; branchName: string }) => void
 }): JSX.Element {
-  const [dragOver, setDragOver] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
+  const [hover, setHover] = useState(false)
+
+  const handleMouseUp = (): void => {
+    if (_linearDragData) {
+      onDrop({ ..._linearDragData })
+    }
+  }
 
   return (
     <div
-      onDragEnter={(e) => {
-        if (e.dataTransfer.types.includes('application/x-linear-task')) {
-          e.preventDefault()
-          setIsDragging(true)
-          setDragOver(true)
-        }
-      }}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('application/x-linear-task')) {
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'copy'
-          setDragOver(true)
-        }
-      }}
-      onDragLeave={(e) => {
-        // Only hide if leaving the drop zone entirely (not entering a child)
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-          setDragOver(false)
-          setIsDragging(false)
-        }
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDragOver(false)
-        setIsDragging(false)
-        const raw = e.dataTransfer.getData('application/x-linear-task')
-        if (raw) {
-          try {
-            onDrop(JSON.parse(raw))
-          } catch { /* ignore */ }
-        }
-      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onMouseUp={handleMouseUp}
       style={{
         margin: '4px 8px',
-        padding: dragOver ? '14px 10px' : '6px 10px',
+        padding: hover ? '14px 10px' : '6px 10px',
         borderRadius: 6,
-        border: dragOver
+        border: hover
           ? '2px solid var(--accent)'
           : '2px dashed rgba(124,106,247,.2)',
-        background: dragOver
+        background: hover
           ? 'rgba(124,106,247,.12)'
           : 'rgba(124,106,247,.02)',
         textAlign: 'center',
@@ -808,10 +840,10 @@ function WorktreeDropZone({
     >
       <span style={{
         fontSize: 10,
-        color: dragOver ? 'var(--accent2)' : 'var(--text3)',
-        opacity: dragOver ? 1 : 0.6,
+        color: hover ? 'var(--accent2)' : 'var(--text3)',
+        opacity: hover ? 1 : 0.6,
       }}>
-        {dragOver ? 'Release to create worktree' : 'Drop task to create worktree'}
+        {hover ? 'Release to create worktree' : 'Drop task to create worktree'}
       </span>
     </div>
   )
@@ -842,6 +874,8 @@ function LinearSection(): JSX.Element {
   const timeSince = lastFetched
     ? `${Math.round((Date.now() - lastFetched) / 60000)}m ago`
     : null
+
+  if (!isAuthenticated) return <></>
 
   return (
     <>
