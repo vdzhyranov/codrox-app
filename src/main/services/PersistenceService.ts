@@ -100,7 +100,7 @@ class PersistenceService {
   }
 
   readWorktreeState(worktreePath: string): WorktreeState | null {
-    const statePath = join(worktreePath, '.forge', 'state.json')
+    const statePath = join(worktreePath, '.codrox', 'state.json')
     if (!existsSync(statePath)) return null
     try {
       const raw = readFileSync(statePath, 'utf-8')
@@ -111,11 +111,11 @@ class PersistenceService {
   }
 
   writeWorktreeState(worktreePath: string, state: WorktreeState): void {
-    const forgeDir = join(worktreePath, '.forge')
-    if (!existsSync(forgeDir)) {
-      mkdirSync(forgeDir, { recursive: true })
+    const codroxDir = join(worktreePath, '.codrox')
+    if (!existsSync(codroxDir)) {
+      mkdirSync(codroxDir, { recursive: true })
     }
-    const statePath = join(forgeDir, 'state.json')
+    const statePath = join(codroxDir, 'state.json')
     writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf-8')
   }
 }

@@ -1,4 +1,4 @@
-# Forge OS — Product Spec
+# Codrox — Product Spec
 
 ## AI-Native Development Environment with Parallel Agent Orchestration
 
@@ -12,7 +12,7 @@
 
 Modern IDEs were designed for a single developer writing code linearly. Claude Code changes the fundamental unit of work — instead of _you_ writing code, you direct agents that write code. The bottleneck shifts from typing to thinking: proposing, reviewing, orchestrating, verifying.
 
-Forge OS is built around that shift. It replaces the IDE with an **agent orchestration layer** — where the primary interface is not a file editor but a mission control for parallel AI agents, each working in its own isolated git worktree, each moving through a structured lifecycle from idea to verified implementation.
+Codrox is built around that shift. It replaces the IDE with an **agent orchestration layer** — where the primary interface is not a file editor but a mission control for parallel AI agents, each working in its own isolated git worktree, each moving through a structured lifecycle from idea to verified implementation.
 
 **Core bets:**
 
@@ -25,7 +25,7 @@ Forge OS is built around that shift. It replaces the IDE with an **agent orchest
 
 ## 2. The Problem with Current Tooling
 
-| Problem                                 | Current State                          | Forge OS                                                                  |
+| Problem                                 | Current State                          | Codrox                                                                  |
 | --------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------- |
 | Claude Code is one session, one context | Sequential, blocks parallelism         | Multiple agents, multiple worktrees, running in parallel                  |
 | No lifecycle for prompting              | Freeform chat, quality varies          | Structured phases: Propose → Grill → Research → Plan → Implement → Verify |
@@ -96,7 +96,7 @@ Forge OS is built around that shift. It replaces the IDE with an **agent orchest
 
 ### What is a Worktree?
 
-A git worktree is a separate working directory linked to the same repository but checked out to a different branch. Forge OS uses worktrees as the **primary unit of parallelism** — one worktree per feature, each with its own:
+A git worktree is a separate working directory linked to the same repository but checked out to a different branch. Codrox uses worktrees as the **primary unit of parallelism** — one worktree per feature, each with its own:
 
 - Git branch (isolated from others)
 - Claude Code session (separate context)
@@ -341,7 +341,7 @@ If a worktree has no active agent, the panel shows an “Assign task to agent”
 
 ### Agent Limits
 
-Agents consume parallel Claude Code sessions. Recommended: no more than 4–6 simultaneous agents on a single machine (CPU/memory bound). Forge OS will warn when approaching the limit.
+Agents consume parallel Claude Code sessions. Recommended: no more than 4–6 simultaneous agents on a single machine (CPU/memory bound). Codrox will warn when approaching the limit.
 
 ---
 

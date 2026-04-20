@@ -1,10 +1,19 @@
 {
   "name": "codrox",
-  "version": "0.1.18",
+  "version": "0.2.0",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
-  "homepage": ".",
+  "license": "MIT",
+  "homepage": "https://github.com/vdzhyranov/codrox-app#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vdzhyranov/codrox-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vdzhyranov/codrox-app/issues"
+  },
+  "keywords": ["electron", "ai", "development-environment", "claude", "agent-orchestration", "git-worktree", "typescript", "react", "ide", "codrox"],
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

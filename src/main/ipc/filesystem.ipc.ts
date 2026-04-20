@@ -6,7 +6,7 @@ import { gitService } from '../services/GitService'
 import type { FileTreeNode } from '@shared/types/filesystem'
 import type { GitFileStatus } from '@shared/types/git'
 
-const IGNORED = new Set(['.git', 'node_modules', '.forge', '.DS_Store', '.Trash', 'dist', 'out'])
+const IGNORED = new Set(['.git', 'node_modules', '.codrox', '.DS_Store', '.Trash', 'dist', 'out'])
 const MAX_DEPTH = 10
 
 async function buildFileTree(
