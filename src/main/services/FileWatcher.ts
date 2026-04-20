@@ -26,7 +26,7 @@ class FileWatcher {
             return (
               !rel.includes('/.git/') &&
               !rel.includes('/node_modules/') &&
-              !rel.includes('/.forge/') &&
+              !rel.includes('/.codrox/') &&
               !rel.includes('.DS_Store')
             )
           })
@@ -57,7 +57,7 @@ class FileWatcher {
         )
       },
       {
-        ignore: ['.git', 'node_modules', '.forge', '.DS_Store']
+        ignore: ['.git', 'node_modules', '.codrox', '.DS_Store']
       }
     )
 

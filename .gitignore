@@ -3,3 +3,14 @@ dist
 out
 .DS_Store
 *.local
+.env*
+*.log
+coverage/
+.vscode/
+.idea/
+*.pem
+*.key
+.omc/
+.claude/
+.forge/
+*.tsbuildinfo
