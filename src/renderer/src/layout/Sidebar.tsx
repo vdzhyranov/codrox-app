@@ -2,9 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useSidebarStore } from '@renderer/store/sidebarStore'
 import { useLinearStore } from '@renderer/store/linearStore'
+import { useSettingsStore } from '@renderer/store/settingsStore'
 import { CreateTaskModal } from '@renderer/components/CreateTaskModal'
 import { LinearSetupModal } from '@renderer/components/LinearSetupModal'
 import type { Workspace, Worktree, LinearTask } from '@shared/types'
+import { THEMES } from '@shared/types'
+import type { ThemeDefinition } from '@shared/types'
 
 // Stable color palette for workspace dots
 const DOT_COLORS = [
@@ -94,7 +97,7 @@ export function ActivityBar(): JSX.Element {
                   border: '1px solid var(--border)',
                   borderRadius: 5,
                   padding: '4px 8px',
-                  fontSize: 10,
+                  fontSize: 'var(--fs-sm)',
                   color: 'var(--text2)',
                   whiteSpace: 'nowrap',
                   pointerEvents: 'none',
@@ -136,7 +139,7 @@ function SectionHeader({
     >
       <span
         style={{
-          fontSize: 9,
+          fontSize: 'var(--fs-xs)',
           fontWeight: 600,
           letterSpacing: '0.12em',
           color: 'var(--text3)',
@@ -208,7 +211,7 @@ function NewWorktreeInline({
         style={{
           flex: 1,
           padding: '2px 6px',
-          fontSize: 11,
+          fontSize: 'var(--fs-md)',
           background: 'var(--surface2)',
           border: '1px solid var(--accent)',
           borderRadius: 4,
@@ -225,7 +228,7 @@ function NewWorktreeInline({
           border: 'none',
           cursor: 'pointer',
           color: 'var(--text3)',
-          fontSize: 12,
+          fontSize: 'var(--fs-icon)',
           lineHeight: 1,
           padding: '0 2px',
         }}
@@ -301,7 +304,7 @@ function WorktreeNode({
           style={{
             flex: 1,
             padding: '2px 6px',
-            fontSize: 11,
+            fontSize: 'var(--fs-md)',
             background: 'var(--surface2)',
             border: '1px solid var(--accent)',
             borderRadius: 4,
@@ -337,7 +340,7 @@ function WorktreeNode({
       {/* branch / name */}
       <span
         style={{
-          fontSize: 11,
+          fontSize: 'var(--fs-md)',
           color: isActive ? 'var(--text)' : 'var(--text2)',
           flex: 1,
           overflow: 'hidden',
@@ -378,7 +381,7 @@ function WorktreeNode({
             border: 'none',
             cursor: 'pointer',
             color: 'var(--text3)',
-            fontSize: 12,
+            fontSize: 'var(--fs-icon)',
             lineHeight: 1,
             padding: '0 2px',
             flexShrink: 0,
@@ -420,8 +423,8 @@ function NewWorktreeButton({ onClick }: { onClick: () => void }): JSX.Element {
         transition: 'opacity .12s',
       }}
     >
-      <span style={{ fontSize: 11, color: 'var(--text3)' }}>+</span>
-      <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.04em' }}>
+      <span style={{ fontSize: 'var(--fs-md)', color: 'var(--text3)' }}>+</span>
+      <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)', letterSpacing: '0.04em' }}>
         New worktree...
       </span>
     </div>
@@ -494,7 +497,7 @@ function WorkspaceCard({
         />
         <span
           style={{
-            fontSize: 12,
+            fontSize: 'var(--fs-icon)',
             fontWeight: 600,
             color: isActive ? 'var(--text)' : 'var(--text2)',
             flex: 1,
@@ -533,7 +536,7 @@ function WorkspaceCard({
       {/* Path */}
       <div
         style={{
-          fontSize: 9,
+          fontSize: 'var(--fs-xs)',
           color: 'var(--text3)',
           fontFamily: 'var(--mono)',
           overflow: 'hidden',
@@ -551,7 +554,7 @@ function WorkspaceCard({
         {gitBranch && (
           <span
             style={{
-              fontSize: 9,
+              fontSize: 'var(--fs-xs)',
               color: 'var(--green)',
               background: 'var(--green-dim)',
               border: '1px solid rgba(62,207,142,.2)',
@@ -564,7 +567,7 @@ function WorkspaceCard({
           </span>
         )}
         {lastOpened && (
-          <span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)', marginLeft: 'auto' }}>
             {lastOpened}
           </span>
         )}
@@ -598,7 +601,7 @@ function AddWorkspaceCard({ onClick }: { onClick: () => void }): JSX.Element {
       <span style={{ fontSize: 16, color: hovered ? 'var(--accent2)' : 'var(--text3)', lineHeight: 1 }}>+</span>
       <span
         style={{
-          fontSize: 11,
+          fontSize: 'var(--fs-md)',
           color: hovered ? 'var(--accent2)' : 'var(--text3)',
           letterSpacing: '0.04em',
         }}
@@ -636,7 +639,7 @@ function WorkspaceSelector({ onAddWorkspace }: { onAddWorkspace: () => void }): 
       {workspaces.length === 0 ? (
         <p
           style={{
-            fontSize: 10,
+            fontSize: 'var(--fs-sm)',
             color: 'var(--text3)',
             padding: '8px 14px 12px',
             lineHeight: 1.6,
@@ -774,7 +777,7 @@ function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
         />
         <span
           style={{
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             color: 'var(--text3)',
             fontFamily: 'var(--mono)',
             flexShrink: 0,
@@ -783,14 +786,14 @@ function LinearTaskCard({ task }: { task: LinearTask }): JSX.Element {
           {task.identifier}
         </span>
         {prio && (
-          <span style={{ fontSize: 9, color: prio.color, fontFamily: 'var(--mono)', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 'var(--fs-xs)', color: prio.color, fontFamily: 'var(--mono)', marginLeft: 'auto' }}>
             {prio.label}
           </span>
         )}
       </div>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 'var(--fs-md)',
           color: 'var(--text2)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -839,7 +842,7 @@ function WorktreeDropZone({
       }}
     >
       <span style={{
-        fontSize: 10,
+        fontSize: 'var(--fs-sm)',
         color: hover ? 'var(--accent2)' : 'var(--text3)',
         opacity: hover ? 1 : 0.6,
       }}>
@@ -895,12 +898,12 @@ function LinearSection(): JSX.Element {
           onClick={() => setCollapsed(!collapsed)}
           style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
         >
-          <span style={{ fontSize: 9, color: 'var(--text3)', transition: 'transform .12s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+          <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)', transition: 'transform .12s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
             ▾
           </span>
           <span
             style={{
-              fontSize: 9,
+              fontSize: 'var(--fs-xs)',
               fontWeight: 600,
               letterSpacing: '0.12em',
               color: 'var(--text3)',
@@ -938,7 +941,7 @@ function LinearSection(): JSX.Element {
                 border: 'none',
                 cursor: 'pointer',
                 color: 'var(--text3)',
-                fontSize: 11,
+                fontSize: 'var(--fs-md)',
                 lineHeight: 1,
                 padding: '0 2px',
                 transition: 'color .12s',
@@ -959,7 +962,7 @@ function LinearSection(): JSX.Element {
               <span
                 onClick={() => setActiveView('extensions')}
                 style={{
-                  fontSize: 10,
+                  fontSize: 'var(--fs-sm)',
                   color: 'var(--accent2)',
                   cursor: 'pointer',
                   textDecoration: 'underline',
@@ -983,7 +986,7 @@ function LinearSection(): JSX.Element {
                     style={{
                       width: '100%',
                       padding: '3px 6px',
-                      fontSize: 10,
+                      fontSize: 'var(--fs-sm)',
                       background: 'var(--surface2)',
                       border: '1px solid var(--border)',
                       borderRadius: 4,
@@ -1001,15 +1004,15 @@ function LinearSection(): JSX.Element {
 
               {/* Task list */}
               {isLoading && tasks.length === 0 ? (
-                <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text3)' }}>
+                <div style={{ padding: '8px 14px', fontSize: 'var(--fs-sm)', color: 'var(--text3)' }}>
                   Loading tasks...
                 </div>
               ) : error ? (
-                <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--red)' }}>
+                <div style={{ padding: '8px 14px', fontSize: 'var(--fs-sm)', color: 'var(--red)' }}>
                   {error}
                 </div>
               ) : tasks.length === 0 ? (
-                <div style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text3)' }}>
+                <div style={{ padding: '8px 14px', fontSize: 'var(--fs-sm)', color: 'var(--text3)' }}>
                   No open tasks
                 </div>
               ) : (
@@ -1022,7 +1025,7 @@ function LinearSection(): JSX.Element {
 
               {/* Last updated */}
               {timeSince && (
-                <div style={{ padding: '4px 14px', fontSize: 9, color: 'var(--text3)', textAlign: 'right' }}>
+                <div style={{ padding: '4px 14px', fontSize: 'var(--fs-xs)', color: 'var(--text3)', textAlign: 'right' }}>
                   Updated {timeSince}
                 </div>
               )}
@@ -1163,7 +1166,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
             border: 'none',
             cursor: 'pointer',
             color: backHovered ? 'var(--text2)' : 'var(--text3)',
-            fontSize: 12,
+            fontSize: 'var(--fs-icon)',
             lineHeight: 1,
             padding: '2px 4px',
             borderRadius: 4,
@@ -1175,7 +1178,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         </button>
         <span
           style={{
-            fontSize: 12,
+            fontSize: 'var(--fs-icon)',
             fontWeight: 600,
             color: 'var(--text)',
             overflow: 'hidden',
@@ -1200,7 +1203,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         >
           <span
             style={{
-              fontSize: 9,
+              fontSize: 'var(--fs-xs)',
               fontWeight: 600,
               letterSpacing: '0.12em',
               color: 'var(--text3)',
@@ -1259,8 +1262,8 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
               onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
               onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
             >
-              <span style={{ fontSize: 11, color: 'var(--text3)' }}>+</span>
-              <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.04em' }}>Quick worktree</span>
+              <span style={{ fontSize: 'var(--fs-md)', color: 'var(--text3)' }}>+</span>
+              <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)', letterSpacing: '0.04em' }}>Quick worktree</span>
             </div>
             <button
               onClick={() => setShowNewWorktree(true)}
@@ -1270,7 +1273,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
                 border: 'none',
                 cursor: 'pointer',
                 color: 'var(--text3)',
-                fontSize: 10,
+                fontSize: 'var(--fs-sm)',
                 padding: '0 2px',
                 transition: 'color .12s',
               }}
@@ -1285,7 +1288,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         {worktrees.length === 0 && (
           <p
             style={{
-              fontSize: 10,
+              fontSize: 'var(--fs-sm)',
               color: 'var(--text3)',
               padding: '8px 14px',
               lineHeight: 1.6,
@@ -1322,106 +1325,107 @@ function ExplorerView({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.E
   return <WorkspaceSelector onAddWorkspace={onAddWorkspace} />
 }
 
+// ── Theme swatch ──────────────────────────────────────────────────────────────
+
+function ThemeSwatch({
+  theme,
+  isActive,
+  onClick,
+}: {
+  theme: ThemeDefinition
+  isActive: boolean
+  onClick: () => void
+}): JSX.Element {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: theme.colors.surface,
+        border: isActive
+          ? `2px solid ${theme.colors.accent}`
+          : `1px solid ${hovered ? theme.colors.border2 : theme.colors.border}`,
+        borderRadius: 8,
+        padding: isActive ? 9 : 10,
+        cursor: 'pointer',
+        transition: 'border-color .15s',
+      }}
+    >
+      {/* Mini preview */}
+      <div style={{ marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: theme.colors.accent,
+              flexShrink: 0,
+            }}
+          />
+          <div
+            style={{
+              flex: 1,
+              height: 2,
+              borderRadius: 1,
+              background: theme.colors.text,
+              opacity: 0.5,
+            }}
+          />
+        </div>
+        <div
+          style={{
+            height: 2,
+            borderRadius: 1,
+            background: theme.colors.text2,
+            opacity: 0.4,
+            width: '75%',
+            marginBottom: 3,
+          }}
+        />
+        <div
+          style={{
+            height: 2,
+            borderRadius: 1,
+            background: theme.colors.text3,
+            opacity: 0.4,
+            width: '50%',
+          }}
+        />
+      </div>
+      <div
+        style={{
+          fontSize: 'var(--fs-xs)',
+          color: isActive ? theme.colors.accent2 : theme.colors.text2,
+          fontFamily: 'var(--mono)',
+          letterSpacing: '0.04em',
+        }}
+      >
+        {theme.name}
+      </div>
+    </div>
+  )
+}
+
 // ── Settings view ─────────────────────────────────────────────────────────────
 
 function SettingsView(): JSX.Element {
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const worktreesByWorkspace = useWorkspaceStore((s) => s.worktreesByWorkspace)
+  const currentTheme = useSettingsStore((s) => s.theme)
+  const fontSize = useSettingsStore((s) => s.fontSize)
+  const setTheme = useSettingsStore((s) => s.setTheme)
+  const setFontSize = useSettingsStore((s) => s.setFontSize)
 
-  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null
+  const isMac = navigator.platform.includes('Mac')
+  const modKey = isMac ? '\u2318' : 'Ctrl'
 
-  const [claudeMd, setClaudeMd] = useState<string>('')
-  const [claudeMdLoading, setClaudeMdLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveMsg, setSaveMsg] = useState<string | null>(null)
-  const [regenerating, setRegenerating] = useState(false)
-  const [gitBranch, setGitBranch] = useState<string | null>(null)
-
-  const worktreeCount = workspace
-    ? (worktreesByWorkspace[workspace.id] ?? []).length
-    : 0
-
-  // Load CLAUDE.md and git branch whenever the active workspace changes
-  useEffect(() => {
-    if (!workspace) return
-
-    setClaudeMdLoading(true)
-    setGitBranch(null)
-
-    window.api.invoke('workspace:readClaudeMd', { path: workspace.path })
-      .then((content) => {
-        setClaudeMd((content as string | null) ?? '')
-      })
-      .catch(() => setClaudeMd(''))
-      .finally(() => setClaudeMdLoading(false))
-
-    window.api.invoke('git:branch', { path: workspace.path })
-      .then((branch) => setGitBranch(branch as string | null))
-      .catch(() => setGitBranch(null))
-  }, [workspace?.id])
-
-  const handleSave = async (): Promise<void> => {
-    if (!workspace) return
-    setSaving(true)
-    setSaveMsg(null)
-    try {
-      await window.api.invoke('workspace:writeClaudeMd', { path: workspace.path, content: claudeMd })
-      setSaveMsg('Saved')
-      setTimeout(() => setSaveMsg(null), 2000)
-    } catch {
-      setSaveMsg('Error saving')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleRegenerate = async (): Promise<void> => {
-    if (!workspace) return
-    setRegenerating(true)
-    setSaveMsg(null)
-    try {
-      const info = await window.api.invoke('workspace:getProjectInfo', { path: workspace.path }) as {
-        name: string
-        description: string
-        techStack: string[]
-        buildCommands: string[]
-      } | null
-      if (info) {
-        const techList = info.techStack.map((t: string) => `- ${t}`).join('\n')
-        const cmdList = info.buildCommands.length > 0
-          ? info.buildCommands.map((c: string) => `- \`${c}\``).join('\n')
-          : '- (no build commands detected)'
-        const generated = `# ${info.name}\n\n## Project Overview\n${info.description}\n\n## Tech Stack\n${techList}\n\n## Development\n${cmdList}\n\n## Guidelines\n- Follow existing code patterns\n- Write tests for new functionality\n- Keep commits atomic\n`
-        setClaudeMd(generated)
-        await window.api.invoke('workspace:writeClaudeMd', { path: workspace.path, content: generated })
-        setSaveMsg('Regenerated')
-        setTimeout(() => setSaveMsg(null), 2000)
-      }
-    } catch {
-      setSaveMsg('Error regenerating')
-    } finally {
-      setRegenerating(false)
-    }
-  }
-
-  if (!workspace) {
-    return (
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 16,
-        }}
-      >
-        <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text3)', lineHeight: 1.6 }}>
-          No workspace selected
-        </p>
-      </div>
-    )
-  }
+  const fontSizePresets = [
+    { label: 'S', value: 11 },
+    { label: 'M', value: 13 },
+    { label: 'L', value: 15 },
+    { label: 'XL', value: 17 },
+  ]
 
   return (
     <div
@@ -1433,192 +1437,211 @@ function SettingsView(): JSX.Element {
         padding: '12px 0',
       }}
     >
-      {/* Section: Workspace Info */}
-      <div style={{ padding: '0 14px 12px' }}>
+      {/* Section: Theme */}
+      <div style={{ padding: '0 14px 8px' }}>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             fontWeight: 600,
             letterSpacing: '0.12em',
             color: 'var(--text3)',
             textTransform: 'uppercase',
           }}
         >
-          Workspace
+          Theme
         </span>
       </div>
 
-      <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Name */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
-            NAME
-          </label>
-          <div
-            style={{
-              fontSize: 12,
-              color: 'var(--text)',
-              padding: '5px 8px',
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: 5,
-              fontFamily: 'var(--mono)',
-            }}
-          >
-            {workspace.name}
-          </div>
-        </div>
-
-        {/* Path */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
-            PATH
-          </label>
-          <div
-            style={{
-              fontSize: 10,
-              color: 'var(--text2)',
-              padding: '5px 8px',
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: 5,
-              fontFamily: 'var(--mono)',
-              overflowX: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-            title={workspace.path}
-          >
-            {workspace.path}
-          </div>
-        </div>
-
-        {/* Git branch + worktree count */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
-              BRANCH
-            </label>
-            <div
-              style={{
-                fontSize: 11,
-                color: gitBranch ? 'var(--green)' : 'var(--text3)',
-                padding: '4px 8px',
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                borderRadius: 5,
-                fontFamily: 'var(--mono)',
-              }}
-            >
-              {gitBranch ?? '—'}
-            </div>
-          </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.06em' }}>
-              WORKTREES
-            </label>
-            <div
-              style={{
-                fontSize: 11,
-                color: 'var(--text2)',
-                padding: '4px 8px',
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                borderRadius: 5,
-                fontFamily: 'var(--mono)',
-              }}
-            >
-              {worktreeCount || '—'}
-            </div>
-          </div>
+      <div style={{ padding: '0 14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {THEMES.map((t) => (
+            <ThemeSwatch
+              key={t.id}
+              theme={t}
+              isActive={currentTheme === t.id}
+              onClick={() => setTheme(t.id)}
+            />
+          ))}
         </div>
       </div>
 
       {/* Divider */}
       <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
 
-      {/* Section: CLAUDE.md */}
-      <div style={{ padding: '0 14px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Section: Font Size */}
+      <div style={{ padding: '0 14px 8px' }}>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             fontWeight: 600,
             letterSpacing: '0.12em',
             color: 'var(--text3)',
             textTransform: 'uppercase',
           }}
         >
-          CLAUDE.md
+          Font Size
         </span>
-        <button
-          onClick={handleRegenerate}
-          disabled={regenerating}
-          style={{
-            background: 'var(--accent-dim)',
-            border: '1px solid var(--accent)',
-            borderRadius: 4,
-            color: 'var(--accent2)',
-            fontSize: 10,
-            padding: '2px 8px',
-            cursor: regenerating ? 'not-allowed' : 'pointer',
-            fontFamily: 'var(--mono)',
-            opacity: regenerating ? 0.6 : 1,
-            transition: 'opacity .12s',
-          }}
-        >
-          {regenerating ? '...' : 'Regenerate'}
-        </button>
       </div>
 
-      <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {claudeMdLoading ? (
-          <div style={{ fontSize: 11, color: 'var(--text3)', padding: '8px 0' }}>Loading...</div>
-        ) : (
-          <textarea
-            value={claudeMd}
-            onChange={(e) => setClaudeMd(e.target.value)}
-            placeholder="No CLAUDE.md found. Click Regenerate to create one."
-            style={{
-              width: '100%',
-              minHeight: 220,
-              resize: 'vertical',
-              fontSize: 10,
-              lineHeight: 1.6,
-              padding: '8px',
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              borderRadius: 5,
-              color: 'var(--text)',
-              fontFamily: 'var(--mono)',
-            }}
-          />
-        )}
+      <div style={{ padding: '0 14px' }}>
+        {/* Preset buttons */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          {fontSizePresets.map((preset) => {
+            const isActive = fontSize === preset.value
+            return (
+              <button
+                key={preset.value}
+                onClick={() => setFontSize(preset.value)}
+                style={{
+                  flex: 1,
+                  padding: '6px 0',
+                  borderRadius: 6,
+                  border: isActive ? '1px solid var(--accent)' : '1px solid var(--border)',
+                  background: isActive ? 'var(--accent-dim)' : 'var(--surface2)',
+                  color: isActive ? 'var(--accent2)' : 'var(--text2)',
+                  fontSize: 'var(--fs-sm)',
+                  fontFamily: 'var(--mono)',
+                  cursor: 'pointer',
+                  transition: 'all .12s',
+                  fontWeight: isActive ? 600 : 400,
+                }}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-          {saveMsg && (
-            <span style={{ fontSize: 10, color: saveMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)' }}>
-              {saveMsg}
-            </span>
-          )}
+        {/* Fine-tune control */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            padding: '5px 10px',
+          }}
+        >
           <button
-            onClick={handleSave}
-            disabled={saving || claudeMdLoading}
+            onClick={() => setFontSize(fontSize - 1)}
+            disabled={fontSize <= 11}
             style={{
-              background: 'var(--accent)',
+              background: 'none',
               border: 'none',
-              borderRadius: 4,
-              color: '#fff',
-              fontSize: 10,
-              padding: '4px 12px',
-              cursor: saving || claudeMdLoading ? 'not-allowed' : 'pointer',
+              cursor: fontSize <= 11 ? 'not-allowed' : 'pointer',
+              color: fontSize <= 11 ? 'var(--text3)' : 'var(--text2)',
+              fontSize: 14,
               fontFamily: 'var(--mono)',
-              opacity: saving || claudeMdLoading ? 0.6 : 1,
-              transition: 'opacity .12s',
+              padding: '0 4px',
+              lineHeight: 1,
+              opacity: fontSize <= 11 ? 0.3 : 1,
             }}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {'\u2212'}
+          </button>
+          <span
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 'var(--fs-md)',
+              color: 'var(--text)',
+              fontFamily: 'var(--mono)',
+              fontWeight: 500,
+            }}
+          >
+            {fontSize}px
+          </span>
+          <button
+            onClick={() => setFontSize(fontSize + 1)}
+            disabled={fontSize >= 18}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: fontSize >= 18 ? 'not-allowed' : 'pointer',
+              color: fontSize >= 18 ? 'var(--text3)' : 'var(--text2)',
+              fontSize: 14,
+              fontFamily: 'var(--mono)',
+              padding: '0 4px',
+              lineHeight: 1,
+              opacity: fontSize >= 18 ? 0.3 : 1,
+            }}
+          >
+            +
           </button>
         </div>
+
+        {fontSize !== 13 && (
+          <button
+            onClick={() => setFontSize(13)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--accent2)',
+              fontSize: 'var(--fs-xs)',
+              fontFamily: 'var(--mono)',
+              padding: '4px 0',
+              letterSpacing: '0.04em',
+            }}
+          >
+            Reset to default (13px)
+          </button>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
+
+      {/* Section: Keyboard Shortcuts */}
+      <div style={{ padding: '0 14px 8px' }}>
+        <span
+          style={{
+            fontSize: 'var(--fs-xs)',
+            fontWeight: 600,
+            letterSpacing: '0.12em',
+            color: 'var(--text3)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Shortcuts
+        </span>
+      </div>
+
+      <div style={{ padding: '0 14px' }}>
+        {[
+          { label: 'Zoom In', keys: `${modKey} =` },
+          { label: 'Zoom Out', keys: `${modKey} -` },
+          { label: 'Reset Zoom', keys: `${modKey} 0` },
+          { label: 'Close Tab', keys: `${modKey} W` },
+        ].map((shortcut) => (
+          <div
+            key={shortcut.label}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '5px 0',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)' }}>{shortcut.label}</span>
+            <span
+              style={{
+                fontSize: 'var(--fs-xs)',
+                color: 'var(--text3)',
+                fontFamily: 'var(--mono)',
+                background: 'var(--surface2)',
+                padding: '2px 6px',
+                borderRadius: 3,
+                border: '1px solid var(--border)',
+              }}
+            >
+              {shortcut.keys}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -1652,7 +1675,7 @@ function ExtensionsView(): JSX.Element {
       <div style={{ padding: '0 14px 12px' }}>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             fontWeight: 600,
             letterSpacing: '0.12em',
             color: 'var(--text3)',
@@ -1680,8 +1703,8 @@ function ExtensionsView(): JSX.Element {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 16 }}>◫</span>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Linear</div>
-              <div style={{ fontSize: 9, color: 'var(--text3)' }}>Issue tracking</div>
+              <div style={{ fontSize: 'var(--fs-icon)', fontWeight: 600, color: 'var(--text)' }}>Linear</div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>Issue tracking</div>
             </div>
           </div>
           {isAuthenticated && (
@@ -1703,7 +1726,7 @@ function ExtensionsView(): JSX.Element {
 
         {isAuthenticated ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 10, color: 'var(--text2)' }}>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)' }}>
               Signed in as {user?.displayName || user?.name || user?.email}
             </span>
             <button
@@ -1711,7 +1734,7 @@ function ExtensionsView(): JSX.Element {
               style={{
                 width: '100%',
                 padding: '5px 12px',
-                fontSize: 10,
+                fontSize: 'var(--fs-sm)',
                 background: 'none',
                 border: '1px solid var(--border)',
                 borderRadius: 5,
@@ -1738,7 +1761,7 @@ function ExtensionsView(): JSX.Element {
             style={{
               width: '100%',
               padding: '6px 12px',
-              fontSize: 11,
+              fontSize: 'var(--fs-md)',
               background: 'var(--accent-dim)',
               border: '1px solid var(--accent)',
               borderRadius: 5,

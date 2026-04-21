@@ -39,6 +39,15 @@
   /* Fonts */
   --mono: 'Geist Mono', monospace;
   --sans: 'Syne', sans-serif;
+
+  /* Font size — controlled by settings */
+  --ui-font-size: 13px;
+  --fs-xs: max(8px, calc(var(--ui-font-size) - 4px));
+  --fs-sm: max(9px, calc(var(--ui-font-size) - 3px));
+  --fs-md: max(10px, calc(var(--ui-font-size) - 2px));
+  --fs-icon: max(10px, calc(var(--ui-font-size) - 1px));
+  --fs-base: var(--ui-font-size);
+  --fs-lg: calc(var(--ui-font-size) + 1px);
 }
 
 *,
@@ -53,6 +62,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--mono);
+  font-size: var(--ui-font-size);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -114,7 +124,7 @@ button:focus-visible {
 /* Input / textarea base */
 input, textarea {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-icon);
   background: var(--surface2);
   color: var(--text);
   border: 1px solid var(--border);

@@ -34,7 +34,7 @@ function CollapsibleSectionHeader({
     >
       <span
         style={{
-          fontSize: 9,
+          fontSize: 'var(--fs-xs)',
           color: 'var(--text3)',
           display: 'inline-block',
           transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
@@ -46,7 +46,7 @@ function CollapsibleSectionHeader({
       <span
         style={{
           flex: 1,
-          fontSize: 9,
+          fontSize: 'var(--fs-xs)',
           fontWeight: 600,
           letterSpacing: '0.12em',
           color: 'var(--text3)',
@@ -58,7 +58,7 @@ function CollapsibleSectionHeader({
       {count !== undefined && count > 0 && (
         <span
           style={{
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             padding: '1px 6px',
             borderRadius: 3,
             background: 'var(--surface3)',
@@ -140,7 +140,7 @@ export function RightPanel(): JSX.Element {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 12,
+                fontSize: 'var(--fs-icon)',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'var(--surface2)' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)'; e.currentTarget.style.background = 'transparent' }}
@@ -203,7 +203,7 @@ export function RightPanel(): JSX.Element {
               borderTop: '1px solid var(--border)',
               padding: '6px 12px',
               flexShrink: 0,
-              fontSize: 9,
+              fontSize: 'var(--fs-xs)',
               color: 'var(--text3)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -223,7 +223,7 @@ export function RightPanel(): JSX.Element {
             padding: 16,
           }}
         >
-          <p style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 'var(--fs-md)', color: 'var(--text3)', textAlign: 'center', lineHeight: 1.6 }}>
             {workspaces.length === 0
               ? 'Add a workspace to begin'
               : 'Select a workspace'}

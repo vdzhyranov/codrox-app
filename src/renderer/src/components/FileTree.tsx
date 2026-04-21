@@ -90,7 +90,7 @@ function getGitIndicator(status?: string): JSX.Element | null {
     <span
       style={{
         marginLeft: 'auto',
-        fontSize: 10,
+        fontSize: 'var(--fs-sm)',
         color: cfg.color,
         flexShrink: 0,
       }}
@@ -135,7 +135,7 @@ function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }): JSX.E
           paddingLeft: `${depth * 12 + 10}px`,
           paddingRight: 10,
           cursor: 'pointer',
-          fontSize: 11,
+          fontSize: 'var(--fs-md)',
           color: isDir ? 'var(--text2)' : 'var(--text3)',
           transition: 'all .1s',
           borderRadius: 4,
@@ -154,7 +154,7 @@ function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }): JSX.E
         <span
           style={{
             width: 10,
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             color: 'var(--text3)',
             flexShrink: 0,
             textAlign: 'center',
@@ -166,14 +166,14 @@ function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }): JSX.E
         <span
           style={{
             width: 14,
-            fontSize: 12,
+            fontSize: 'var(--fs-icon)',
             color: isDir ? '#fbbf24' : fileIconData.color,
             flexShrink: 0,
             textAlign: 'center',
             lineHeight: 1,
           }}
         >
-          {isDir ? (isExpanded ? '' : '') : fileIconData.icon}
+          {isDir ? (isExpanded ? '\u{1F4C2}' : '\u{1F4C1}') : fileIconData.icon}
         </span>
         <span
           style={{
@@ -287,7 +287,7 @@ function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
           style={{
             flex: 1,
             padding: '4px 8px',
-            fontSize: 11,
+            fontSize: 'var(--fs-md)',
             background: 'var(--surface2)',
             border: '1px solid var(--border)',
             borderRadius: 4,
@@ -303,7 +303,7 @@ function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
           title={mode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
           style={{
             padding: '2px 6px',
-            fontSize: 10,
+            fontSize: 'var(--fs-sm)',
             background: mode === 'content' ? 'var(--accent-dim)' : 'var(--surface2)',
             border: `1px solid ${mode === 'content' ? 'var(--accent)' : 'var(--border)'}`,
             borderRadius: 4,
@@ -320,12 +320,12 @@ function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
       {query.trim() && (
         <div style={{ maxHeight: 280, overflowY: 'auto', paddingBottom: 4 }}>
           {searching && (
-            <div style={{ padding: '4px 12px', fontSize: 10, color: 'var(--text3)' }}>
+            <div style={{ padding: '4px 12px', fontSize: 'var(--fs-sm)', color: 'var(--text3)' }}>
               Searching...
             </div>
           )}
           {!searching && !hasResults && (
-            <div style={{ padding: '4px 12px', fontSize: 10, color: 'var(--text3)' }}>
+            <div style={{ padding: '4px 12px', fontSize: 'var(--fs-sm)', color: 'var(--text3)' }}>
               No results
             </div>
           )}
@@ -341,18 +341,18 @@ function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
                   gap: 6,
                   padding: '3px 12px',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 'var(--fs-md)',
                   color: 'var(--text2)',
                   transition: 'all .1s',
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)' }}
               >
-                <span style={{ color: fileIcon.color, fontSize: 12, width: 14, textAlign: 'center', flexShrink: 0 }}>
+                <span style={{ color: fileIcon.color, fontSize: 'var(--fs-icon)', width: 14, textAlign: 'center', flexShrink: 0 }}>
                   {fileIcon.icon}
                 </span>
                 <span style={{ fontWeight: 500, flexShrink: 0 }}>{r.name}</span>
-                <span style={{ color: 'var(--text3)', fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ color: 'var(--text3)', fontSize: 'var(--fs-xs)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {r.relativePath}
                 </span>
               </div>
@@ -370,7 +370,7 @@ function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
                   gap: 1,
                   padding: '4px 12px',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 'var(--fs-md)',
                   color: 'var(--text2)',
                   transition: 'all .1s',
                 }}
@@ -378,14 +378,14 @@ function FileSearch({ rootPath }: { rootPath: string }): JSX.Element {
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: fileIcon.color, fontSize: 12, width: 14, textAlign: 'center', flexShrink: 0 }}>
+                  <span style={{ color: fileIcon.color, fontSize: 'var(--fs-icon)', width: 14, textAlign: 'center', flexShrink: 0 }}>
                     {fileIcon.icon}
                   </span>
                   <span style={{ fontWeight: 500, flexShrink: 0 }}>{r.relativePath}</span>
-                  <span style={{ color: 'var(--text3)', fontSize: 9, flexShrink: 0 }}>:{r.line}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: 'var(--fs-xs)', flexShrink: 0 }}>:{r.line}</span>
                 </div>
                 <div style={{
-                  fontSize: 10,
+                  fontSize: 'var(--fs-sm)',
                   color: 'var(--text3)',
                   paddingLeft: 20,
                   overflow: 'hidden',
@@ -419,7 +419,7 @@ export function FileTree(): JSX.Element {
 
   if (!tree) {
     return (
-      <div style={{ padding: 12, fontSize: 11, color: 'var(--text3)' }}>
+      <div style={{ padding: 12, fontSize: 'var(--fs-md)', color: 'var(--text3)' }}>
         Loading...
       </div>
     )

@@ -87,7 +87,7 @@ export function AgentList(): JSX.Element {
 
   if (agents.length === 0) {
     return (
-      <div style={{ padding: '6px 12px', fontSize: 9, color: 'var(--text3)' }}>
+      <div style={{ padding: '6px 12px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
         No recent agents
       </div>
     )
@@ -115,7 +115,7 @@ export function AgentList(): JSX.Element {
             gap: 4,
             padding: '4px 6px 2px',
             cursor: 'pointer',
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             color: 'var(--text3)',
             transition: 'color .1s',
           }}
@@ -125,7 +125,7 @@ export function AgentList(): JSX.Element {
           <span>{showAll ? '▾ Hide' : '▸ Show all'}</span>
           <span
             style={{
-              fontSize: 8,
+              fontSize: 'var(--fs-xs)',
               padding: '0 4px',
               borderRadius: 3,
               background: 'var(--surface3)',
@@ -141,7 +141,7 @@ export function AgentList(): JSX.Element {
 
       {/* Running count indicator when collapsed */}
       {!showAll && running.length === 0 && completed.length > 0 && (
-        <div style={{ padding: '2px 6px', fontSize: 9, color: 'var(--text3)' }}>
+        <div style={{ padding: '2px 6px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
           No active agents
         </div>
       )}
@@ -189,7 +189,7 @@ function AgentItem({ agent, onOpen }: { agent: AgentEntry; onOpen: () => void })
       {/* Task snippet */}
       <span
         style={{
-          fontSize: 10,
+          fontSize: 'var(--fs-sm)',
           color: isRunning ? 'var(--text)' : 'var(--text3)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -201,7 +201,7 @@ function AgentItem({ agent, onOpen }: { agent: AgentEntry; onOpen: () => void })
         {agent.task || agent.id.slice(0, 8)}
       </span>
       {/* Age */}
-      <span style={{ fontSize: 8, color: isRunning ? color : 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0 }}>
+      <span style={{ fontSize: 'var(--fs-xs)', color: isRunning ? color : 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0 }}>
         {formatAge(agent.startedAt)}
       </span>
     </div>

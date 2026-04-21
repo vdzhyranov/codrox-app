@@ -2,6 +2,7 @@ import type { Workspace, Worktree, AppState } from './workspace'
 import type { FileTreeNode, FileChangeEvent } from './filesystem'
 import type { GitFileStatus } from './git'
 import type { LinearUser, LinearTeam, LinearTask, LinearAuthState, CreateTaskInput, WorktreeLinearLink } from './linear'
+import type { AppSettings } from './settings'
 
 // Request-response channel definitions
 export interface IpcChannels {
@@ -145,6 +146,18 @@ export interface IpcChannels {
     request: { id: string }
     response: void
   }
+  'settings:load': {
+    request: void
+    response: AppSettings
+  }
+  'settings:save': {
+    request: AppSettings
+    response: { success: boolean }
+  }
+  'settings:setZoom': {
+    request: { level: number }
+    response: { zoomLevel: number }
+  }
 }
 
 // Streaming event channel payload types
@@ -152,6 +165,7 @@ export interface IpcEventChannels {
   'pty:output': { id: string; data: string }
   'pty:exit': { id: string; exitCode: number }
   'fs:changed': { worktreeId: string; events: FileChangeEvent[] }
+  'settings:zoomChanged': { level: number }
 }
 
 // Helper types for type-safe invoke/listen

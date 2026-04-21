@@ -81,7 +81,7 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
       >
         {/* Dialog header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.05em' }}>
+          <span style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--text)', letterSpacing: '0.05em' }}>
             Commit Changes
           </span>
           <button
@@ -91,7 +91,7 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
               border: 'none',
               color: 'var(--text3)',
               cursor: 'pointer',
-              fontSize: 14,
+              fontSize: 'var(--fs-lg)',
               lineHeight: 1,
               padding: '2px 4px',
               borderRadius: 4,
@@ -112,7 +112,7 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
             overflowY: 'auto',
           }}
         >
-          <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text3)', letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, color: 'var(--text3)', letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>
             {changes.length} file{changes.length !== 1 ? 's' : ''} to commit
           </div>
           {changes.map((f) => {
@@ -122,10 +122,10 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
                 key={f.path}
                 style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}
               >
-                <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color, flexShrink: 0 }}>
+                <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, color: cfg.color, flexShrink: 0 }}>
                   {cfg.label}
                 </span>
-                <span style={{ fontSize: 10, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {f.path}
                 </span>
               </div>
@@ -145,13 +145,13 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
             width: '100%',
             resize: 'vertical',
             padding: '8px 10px',
-            fontSize: 11,
+            fontSize: 'var(--fs-md)',
             lineHeight: 1.5,
           }}
         />
 
         {error && (
-          <div style={{ fontSize: 10, color: 'var(--red)', background: 'var(--red-dim)', border: '1px solid rgba(248,113,113,.2)', borderRadius: 5, padding: '6px 10px' }}>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--red)', background: 'var(--red-dim)', border: '1px solid rgba(248,113,113,.2)', borderRadius: 5, padding: '6px 10px' }}>
             {error}
           </div>
         )}
@@ -163,7 +163,7 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
             style={{
               padding: '6px 14px',
               borderRadius: 6,
-              fontSize: 11,
+              fontSize: 'var(--fs-md)',
               cursor: 'pointer',
               border: '1px solid var(--border)',
               background: 'var(--surface2)',
@@ -179,7 +179,7 @@ function CommitDialog({ changes, onCommit, onCancel }: CommitDialogProps): JSX.E
             style={{
               padding: '6px 16px',
               borderRadius: 6,
-              fontSize: 11,
+              fontSize: 'var(--fs-md)',
               cursor: message.trim() && state !== 'loading' ? 'pointer' : 'not-allowed',
               border: '1px solid rgba(124,106,247,.4)',
               background: message.trim() ? 'var(--accent-dim)' : 'transparent',
@@ -309,7 +309,7 @@ export function GitChanges(): JSX.Element {
     gap: 4,
     padding: '4px 8px',
     borderRadius: 5,
-    fontSize: 10,
+    fontSize: 'var(--fs-sm)',
     fontFamily: 'var(--mono)',
     cursor: 'pointer',
     transition: 'all .12s',
@@ -332,13 +332,13 @@ export function GitChanges(): JSX.Element {
           userSelect: 'none',
         }}
       >
-        <span style={{ fontSize: 9, color: 'var(--text3)', transition: 'transform .15s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+        <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)', transition: 'transform .15s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
           ▾
         </span>
         <span
           style={{
             flex: 1,
-            fontSize: 9,
+            fontSize: 'var(--fs-xs)',
             fontWeight: 600,
             letterSpacing: '0.12em',
             color: 'var(--text3)',
@@ -350,7 +350,7 @@ export function GitChanges(): JSX.Element {
         {changes.length > 0 && (
           <span
             style={{
-              fontSize: 9,
+              fontSize: 'var(--fs-xs)',
               padding: '1px 6px',
               borderRadius: 3,
               background: 'var(--surface3)',
@@ -473,7 +473,7 @@ export function GitChanges(): JSX.Element {
               margin: '6px 12px 0',
               padding: '5px 10px',
               borderRadius: 5,
-              fontSize: 10,
+              fontSize: 'var(--fs-sm)',
               background: notification.ok ? 'var(--green-dim)' : 'var(--red-dim)',
               color: notification.ok ? 'var(--green)' : 'var(--red)',
               border: `1px solid ${notification.ok ? 'rgba(62,207,142,.25)' : 'rgba(248,113,113,.25)'}`,
@@ -487,7 +487,7 @@ export function GitChanges(): JSX.Element {
         {/* File list */}
         <div style={{ maxHeight: 180, overflowY: 'auto', padding: '6px 12px 10px' }}>
           {changes.length === 0 ? (
-            <p style={{ fontSize: 10, color: 'var(--text3)' }}>No changes</p>
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)' }}>No changes</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {changes.map((file) => {
@@ -524,7 +524,7 @@ export function GitChanges(): JSX.Element {
                         width: 16,
                         height: 16,
                         borderRadius: 3,
-                        fontSize: 9,
+                        fontSize: 'var(--fs-xs)',
                         fontWeight: 700,
                         flexShrink: 0,
                         background: cfg.bg,
@@ -537,7 +537,7 @@ export function GitChanges(): JSX.Element {
                     {/* File path */}
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 'var(--fs-sm)',
                         color: isSelected ? 'var(--text)' : 'var(--text2)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
