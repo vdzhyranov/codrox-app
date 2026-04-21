@@ -122,6 +122,10 @@ export interface IpcChannels {
     request: { worktreePath: string }
     response: { success: boolean }
   }
+  'version:check': {
+    request: void
+    response: { current: string; latest: string | null; updateAvailable: boolean }
+  }
   'pty:create': {
     request: {
       id: string
