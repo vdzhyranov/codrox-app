@@ -7,6 +7,7 @@ import { register as registerSubAgents } from './subagents.ipc'
 import { register as registerLinear } from './linear.ipc'
 import { register as registerBrowser } from './browser.ipc'
 import { register as registerSettings } from './settings.ipc'
+import { register as registerVersion } from './version.ipc'
 let registered = false
 
 export function registerAllHandlers(mainWindow: BrowserWindow): void {
@@ -20,4 +21,5 @@ export function registerAllHandlers(mainWindow: BrowserWindow): void {
   registerLinear(ipcMain, mainWindow)
   registerBrowser(ipcMain, mainWindow)
   registerSettings(ipcMain, mainWindow)
+  registerVersion(ipcMain, mainWindow)
 }

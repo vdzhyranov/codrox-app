@@ -32,6 +32,18 @@ export function ActivityBar(): JSX.Element {
   const activeView = useSidebarStore((s) => s.activeView)
   const setActiveView = useSidebarStore((s) => s.setActiveView)
   const [hoveredId, setHoveredId] = useState<SidebarView | null>(null)
+  const [versionInfo, setVersionInfo] = useState<{
+    current: string
+    latest: string | null
+    updateAvailable: boolean
+  } | null>(null)
+  const [versionHovered, setVersionHovered] = useState(false)
+
+  useEffect(() => {
+    window.api.invoke('version:check').then((result) => {
+      setVersionInfo(result as { current: string; latest: string | null; updateAvailable: boolean })
+    })
+  }, [])
 
   const items: { id: SidebarView; icon: string; label: string }[] = [
     { id: 'explorer', icon: '◈', label: 'Explorer' },
@@ -111,6 +123,81 @@ export function ActivityBar(): JSX.Element {
           </div>
         )
       })}
+
+      {/* Version badge at bottom */}
+      <div style={{ marginTop: 'auto', paddingBottom: 10 }}>
+        {versionInfo && (
+          <div
+            onMouseEnter={() => setVersionHovered(true)}
+            onMouseLeave={() => setVersionHovered(false)}
+            style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2,
+              cursor: versionInfo.updateAvailable ? 'pointer' : 'default',
+            }}
+            onClick={() => {
+              if (versionInfo.updateAvailable) {
+                window.open('https://github.com/vdzhyranov/codrox-app/releases/latest', '_blank')
+              }
+            }}
+          >
+            {versionInfo.updateAvailable && (
+              <div
+                style={{
+                  width: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  color: '#f59e0b',
+                  animation: 'pulse 2s ease-in-out infinite',
+                }}
+              >
+                !</div>
+            )}
+            <div
+              style={{
+                fontSize: 9,
+                fontFamily: 'var(--mono)',
+                color: versionHovered ? 'var(--text2)' : 'var(--text3)',
+                letterSpacing: '0.02em',
+                transition: 'color .12s',
+              }}
+            >
+              v{versionInfo.current}
+            </div>
+
+            {/* Tooltip */}
+            {versionHovered && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 46,
+                  bottom: 0,
+                  background: 'var(--surface3)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 5,
+                  padding: '4px 8px',
+                  fontSize: 10,
+                  color: versionInfo.updateAvailable ? '#f59e0b' : 'var(--text2)',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  zIndex: 100,
+                  letterSpacing: '0.06em',
+                }}
+              >
+                {versionInfo.updateAvailable
+                  ? `Update available: v${versionInfo.latest}`
+                  : 'Up to date'}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
