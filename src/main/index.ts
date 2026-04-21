@@ -1,9 +1,10 @@
 process.env.PATH = `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin`;
 
-import { app, shell, BrowserWindow } from "electron";
+import { app, shell, BrowserWindow, Menu } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerAllHandlers } from "./ipc";
+import { persistenceService } from "./services/PersistenceService";
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -28,6 +29,14 @@ function createWindow(): void {
   registerAllHandlers(mainWindow);
 
   mainWindow.on("ready-to-show", () => {
+    // Apply saved zoom level before showing window
+    try {
+      const settings = persistenceService.getAppState<{ zoomLevel: number }>('settings')
+      if (settings?.zoomLevel) {
+        mainWindow.webContents.setZoomLevel(settings.zoomLevel)
+      }
+    } catch { /* ignore */ }
+
     mainWindow.show();
     if (is.dev) {
       mainWindow.webContents.openDevTools({ mode: "bottom" });
@@ -52,6 +61,89 @@ app.whenReady().then(() => {
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
+
+  // Application menu with zoom shortcuts
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin'
+      ? ([
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ] as Electron.MenuItemConstructorOptions[])
+      : []),
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Zoom In',
+          accelerator: 'CommandOrControl+=',
+          click: (): void => {
+            const win = BrowserWindow.getFocusedWindow()
+            if (!win) return
+            const level = Math.min(3, Math.round((win.webContents.getZoomLevel() + 0.5) * 2) / 2)
+            win.webContents.setZoomLevel(level)
+            win.webContents.send('settings:zoomChanged', { level })
+          },
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CommandOrControl+-',
+          click: (): void => {
+            const win = BrowserWindow.getFocusedWindow()
+            if (!win) return
+            const level = Math.max(-2, Math.round((win.webContents.getZoomLevel() - 0.5) * 2) / 2)
+            win.webContents.setZoomLevel(level)
+            win.webContents.send('settings:zoomChanged', { level })
+          },
+        },
+        {
+          label: 'Reset Zoom',
+          accelerator: 'CommandOrControl+0',
+          click: (): void => {
+            const win = BrowserWindow.getFocusedWindow()
+            if (!win) return
+            win.webContents.setZoomLevel(0)
+            win.webContents.send('settings:zoomChanged', { level: 0 })
+          },
+        },
+        { type: 'separator' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
 
   createWindow();
 

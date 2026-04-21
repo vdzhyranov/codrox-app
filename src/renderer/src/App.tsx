@@ -4,6 +4,7 @@ import { MainContent } from '@renderer/layout/MainContent'
 import { RightPanel } from '@renderer/layout/RightPanel'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
+import { useSettingsStore } from '@renderer/store/settingsStore'
 import type { SessionData } from '@shared/types'
 import logoImg from '@renderer/assets/logo.png'
 
@@ -156,6 +157,20 @@ function App(): JSX.Element {
   const [rightPct, setRightPct] = useState(RIGHT_DEFAULT)
   const containerRef = useRef<HTMLDivElement>(null)
   const sessionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Load settings (theme + zoom) as early as possible
+  useEffect(() => {
+    useSettingsStore.getState().load()
+  }, [])
+
+  // Listen for zoom changes from main process (Menu shortcuts)
+  useEffect(() => {
+    const unsub = window.api.on('settings:zoomChanged', (...args: unknown[]) => {
+      const data = args[0] as { level: number }
+      useSettingsStore.getState().syncZoomFromMain(data.level)
+    })
+    return unsub
+  }, [])
 
   // On mount: load workspaces then restore session
   useEffect(() => {

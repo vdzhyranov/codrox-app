@@ -2,6 +2,8 @@ export type { Workspace, Worktree, WorktreeState, AppState, LifecyclePhase, Work
 export type { TabType, TabBase, EditorTab, TerminalTab, ClaudeTab, Tab } from './tabs'
 export type { GitStatusType, FileTreeNode, FileChangeEvent } from './filesystem'
 export type { GitFileStatus, GitDiffHunk, GitDiff } from './git'
+export type { AppSettings, ThemeDefinition, ThemeColors } from './settings'
+export { THEMES, DEFAULT_SETTINGS } from './settings'
 export type {
   IpcChannels,
   IpcEventChannels,
