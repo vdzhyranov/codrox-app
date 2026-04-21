@@ -56,14 +56,32 @@ function compareVersions(current: string, latest: string): boolean {
   return false
 }
 
-export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
+let lastCheck = 0
+const CHECK_INTERVAL = 30 * 60 * 1000 // 30 minutes
+
+async function getVersionInfo(): Promise<VersionInfo> {
+  const current = app.getVersion()
+  const latest = await fetchLatestRelease()
+  lastCheck = Date.now()
+  return {
+    current,
+    latest,
+    updateAvailable: latest ? compareVersions(current, latest) : false,
+  }
+}
+
+export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('version:check', async (): Promise<VersionInfo> => {
-    const current = app.getVersion()
-    const latest = await fetchLatestRelease()
-    return {
-      current,
-      latest,
-      updateAvailable: latest ? compareVersions(current, latest) : false,
-    }
+    return getVersionInfo()
+  })
+
+  // Re-check on window focus (throttled to 30 min)
+  app.on('browser-window-focus', () => {
+    if (Date.now() - lastCheck < CHECK_INTERVAL) return
+    getVersionInfo().then((info) => {
+      if (info.updateAvailable && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('version:update', info)
+      }
+    })
   })
 }

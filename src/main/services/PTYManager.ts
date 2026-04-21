@@ -1,6 +1,6 @@
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
-import { Notification } from 'electron'
+import { app, Notification } from 'electron'
 
 interface PTYSession {
   pty: IPty
@@ -167,9 +167,10 @@ class PTYManager {
       title: 'Codrox',
       body: `Claude finished working on ${worktreeId}`,
       silent: false,
-      sound: 'default',
+      sound: 'Glass',
     })
     n.show()
+    if (process.platform === 'darwin') app.dock?.bounce('informational')
   }
 
   listActive(): Array<{ id: string; worktreeId: string; type: 'claude' | 'terminal'; lastOutputAt: number }> {

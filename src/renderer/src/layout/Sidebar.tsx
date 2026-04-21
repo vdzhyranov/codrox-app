@@ -43,6 +43,11 @@ export function ActivityBar(): JSX.Element {
     window.api.invoke('version:check').then((result) => {
       setVersionInfo(result as { current: string; latest: string | null; updateAvailable: boolean })
     })
+
+    const unsub = window.api.on('version:update', (result) => {
+      setVersionInfo(result as { current: string; latest: string | null; updateAvailable: boolean })
+    })
+    return unsub
   }, [])
 
   const items: { id: SidebarView; icon: string; label: string }[] = [
@@ -140,7 +145,7 @@ export function ActivityBar(): JSX.Element {
             }}
             onClick={() => {
               if (versionInfo.updateAvailable) {
-                window.open('https://github.com/vdzhyranov/codrox-app/releases/latest', '_blank')
+                window.api.invoke('shell:openExternal', { url: 'https://github.com/vdzhyranov/codrox-app/releases/latest' })
               }
             }}
           >
@@ -152,12 +157,12 @@ export function ActivityBar(): JSX.Element {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 12,
-                  color: '#f59e0b',
+                  fontSize: 14,
                   animation: 'pulse 2s ease-in-out infinite',
                 }}
               >
-                !</div>
+                📦
+              </div>
             )}
             <div
               style={{
