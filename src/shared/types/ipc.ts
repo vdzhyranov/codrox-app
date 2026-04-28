@@ -3,7 +3,7 @@ import type { FileTreeNode, FileChangeEvent } from './filesystem'
 import type { GitFileStatus } from './git'
 import type { LinearUser, LinearTeam, LinearTask, LinearAuthState, CreateTaskInput, WorktreeLinearLink } from './linear'
 import type { AppSettings } from './settings'
-import type { GraphRelation, GraphStats, GraphSubgraph } from './graph'
+import type { GraphNodeType, GraphRelation, GraphStats, GraphSubgraph } from './graph'
 
 // Request-response channel definitions
 export interface IpcChannels {
@@ -168,7 +168,7 @@ export interface IpcChannels {
     response: GraphStats
   }
   'graph:search': {
-    request: { workspacePath: string; q: string; limit?: number }
+    request: { workspacePath: string; q: string; limit?: number; nodeTypes?: GraphNodeType[] }
     response: GraphSubgraph
   }
   'graph:neighbors': {
@@ -183,6 +183,10 @@ export interface IpcChannels {
   'graph:stats': {
     request: { workspacePath: string }
     response: GraphStats
+  }
+  'graph:sweep': {
+    request: { workspacePath: string }
+    response: { deleted: number }
   }
 }
 
