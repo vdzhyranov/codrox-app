@@ -2,14 +2,36 @@ import * as watcher from '@parcel/watcher'
 import type { AsyncSubscription } from '@parcel/watcher'
 import type { FileChangeEvent } from '@shared/types/filesystem'
 
+type Listener = (worktreeId: string, events: FileChangeEvent[]) => void
+
 class FileWatcher {
   private watchers: Map<string, AsyncSubscription> = new Map()
-  private onChangeCallback: ((worktreeId: string, events: FileChangeEvent[]) => void) | null = null
+  private listeners: Set<Listener> = new Set()
+  private legacyCallback: Listener | null = null
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map()
   private pendingEvents: Map<string, FileChangeEvent[]> = new Map()
 
-  setCallback(cb: (worktreeId: string, events: FileChangeEvent[]) => void): void {
-    this.onChangeCallback = cb
+  /** Legacy single-callback API: replaces (not appends) the previous callback. */
+  setCallback(cb: Listener): void {
+    if (this.legacyCallback) this.listeners.delete(this.legacyCallback)
+    this.legacyCallback = cb
+    this.listeners.add(cb)
+  }
+
+  /** Add a listener; returns an unsubscribe fn. */
+  addListener(cb: Listener): () => void {
+    this.listeners.add(cb)
+    return () => this.listeners.delete(cb)
+  }
+
+  private emit(worktreeId: string, events: FileChangeEvent[]): void {
+    for (const cb of this.listeners) {
+      try {
+        cb(worktreeId, events)
+      } catch {
+        // a listener throwing should not break others
+      }
+    }
   }
 
   async watch(worktreeId: string, dirPath: string): Promise<void> {
@@ -51,7 +73,7 @@ class FileWatcher {
             this.pendingEvents.delete(worktreeId)
             this.debounceTimers.delete(worktreeId)
             if (batch.length > 0) {
-              this.onChangeCallback?.(worktreeId, batch)
+              this.emit(worktreeId, batch)
             }
           }, 100)
         )

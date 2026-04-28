@@ -8,6 +8,7 @@ import { register as registerLinear } from './linear.ipc'
 import { register as registerBrowser } from './browser.ipc'
 import { register as registerSettings } from './settings.ipc'
 import { register as registerVersion } from './version.ipc'
+import { register as registerGraph } from './graph.ipc'
 let registered = false
 
 export function registerAllHandlers(mainWindow: BrowserWindow): void {
@@ -22,4 +23,5 @@ export function registerAllHandlers(mainWindow: BrowserWindow): void {
   registerBrowser(ipcMain, mainWindow)
   registerSettings(ipcMain, mainWindow)
   registerVersion(ipcMain, mainWindow)
+  registerGraph(ipcMain, mainWindow)
 }

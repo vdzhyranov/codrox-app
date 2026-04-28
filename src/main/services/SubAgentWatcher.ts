@@ -12,6 +12,8 @@ export interface AgentListEntry {
   status: 'running' | 'completed'
   startedAt: number
   fileSize: number
+  /** Absolute path to the agent's .output transcript on disk. */
+  outputPath: string
 }
 
 class SubAgentWatcher {
@@ -137,6 +139,7 @@ class SubAgentWatcher {
             status: isRunning ? 'running' : 'completed',
             startedAt: stat.birthtimeMs || stat.ctimeMs,
             fileSize: stat.size,
+            outputPath: filePath,
           })
         } catch {
           // ignore

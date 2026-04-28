@@ -1,0 +1,168 @@
+import { useMemo } from 'react'
+import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
+import { useGraph } from '@renderer/hooks/useGraph'
+import type { GraphNode, GraphSubgraph } from '@shared/types/graph'
+
+const TYPE_COLOR: Record<GraphNode['type'], string> = {
+  file: '#3b82f6',
+  symbol: '#a855f7',
+  commit: '#22c55e',
+  agent_session: '#eab308',
+  concept: '#06b6d4'
+}
+
+export function GraphPanel(): JSX.Element | null {
+  const workspacePath = useActiveWorktreePath()
+  const { stats, results, query, setQuery, reindex, loadNeighbors, isIndexing, isSearching } =
+    useGraph(workspacePath)
+
+  if (!workspacePath) return null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 360 }}>
+      <div style={{ display: 'flex', gap: 6, padding: '4px 12px 8px' }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search nodes…"
+          style={{
+            flex: 1,
+            padding: '4px 8px',
+            fontSize: 'var(--fs-sm)',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+            borderRadius: 3,
+            outline: 'none'
+          }}
+        />
+        <button
+          onClick={reindex}
+          disabled={isIndexing}
+          title="Re-index this workspace"
+          style={{
+            padding: '4px 10px',
+            fontSize: 'var(--fs-xs)',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text2)',
+            borderRadius: 3,
+            cursor: isIndexing ? 'wait' : 'pointer'
+          }}
+        >
+          {isIndexing ? '…' : 'Reindex'}
+        </button>
+      </div>
+
+      <div style={{ padding: '0 12px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
+        {stats
+          ? `${stats.nodeCount} nodes · ${stats.edgeCount} edges${
+              stats.lastIndexedAt
+                ? ` · indexed ${formatRelative(stats.lastIndexedAt)}`
+                : ' · not indexed'
+            }`
+          : '…'}
+      </div>
+
+      <GraphCanvas results={results} onSelect={loadNeighbors} />
+
+      {query && results.nodes.length === 0 && !isSearching && (
+        <div style={{ padding: '8px 12px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
+          No matches.
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface GraphCanvasProps {
+  results: GraphSubgraph
+  onSelect: (nodeId: string) => void
+}
+
+const W = 260
+const H = 240
+
+/**
+ * Minimal SVG layout: deterministic radial placement of nodes around the first one.
+ * Cheap, no animation, no force simulation — good enough to visualize a small subgraph.
+ */
+function GraphCanvas({ results, onSelect }: GraphCanvasProps): JSX.Element {
+  const positioned = useMemo(() => layout(results.nodes), [results.nodes])
+  const nodeIndex = useMemo(() => {
+    const m = new Map<string, { x: number; y: number; node: GraphNode }>()
+    for (const p of positioned) m.set(p.node.id, p)
+    return m
+  }, [positioned])
+
+  return (
+    <div style={{ padding: 8 }}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
+        {results.edges.map((e) => {
+          const a = nodeIndex.get(e.fromId)
+          const b = nodeIndex.get(e.toId)
+          if (!a || !b) return null
+          return (
+            <line
+              key={e.id}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke="var(--border)"
+              strokeWidth={1}
+            />
+          )
+        })}
+        {positioned.map(({ x, y, node }) => (
+          <g
+            key={node.id}
+            transform={`translate(${x}, ${y})`}
+            onClick={() => onSelect(node.id)}
+            style={{ cursor: 'pointer' }}
+          >
+            <circle r={5} fill={TYPE_COLOR[node.type]} />
+            <text
+              x={8}
+              y={4}
+              fontSize={10}
+              fill="var(--text2)"
+              style={{ pointerEvents: 'none' }}
+            >
+              {truncate(node.label, 22)}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function layout(nodes: GraphNode[]): Array<{ x: number; y: number; node: GraphNode }> {
+  if (nodes.length === 0) return []
+  const cx = W / 2
+  const cy = H / 2
+  if (nodes.length === 1) return [{ x: cx, y: cy, node: nodes[0] }]
+  const radius = Math.min(W, H) / 2 - 30
+  const out: Array<{ x: number; y: number; node: GraphNode }> = [{ x: cx, y: cy, node: nodes[0] }]
+  const rest = nodes.slice(1)
+  for (let i = 0; i < rest.length; i++) {
+    const angle = (i / rest.length) * Math.PI * 2
+    out.push({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius, node: rest[i] })
+  }
+  return out
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + '…'
+}
+
+function formatRelative(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
