@@ -1153,6 +1153,29 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
   const [backHovered, setBackHovered] = useState(false)
 
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
+
+  // Subscribe to git-metadata changes so branch renames and external worktree
+  // mutations are reflected immediately without a manual refresh.
+  useEffect(() => {
+    if (!workspace) return
+
+    window.api.invoke('worktree:watch', {
+      workspaceId: workspace.id,
+      workspacePath: workspace.path,
+    }).catch(() => {})
+
+    const unsub = window.api.on('worktree:changed', (payload) => {
+      const { workspaceId } = payload as { workspaceId: string }
+      if (workspaceId === workspace.id) {
+        loadWorktrees(workspace.id, workspace.path).catch(() => {})
+      }
+    })
+
+    return () => {
+      unsub()
+      window.api.invoke('worktree:unwatch', { workspaceId: workspace.id }).catch(() => {})
+    }
+  }, [workspace?.id, workspace?.path])
   const worktrees = workspace ? (worktreesByWorkspace[workspace.id] ?? []) : []
 
   const sorted = [...worktrees].sort((a, b) => {
