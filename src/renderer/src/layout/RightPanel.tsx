@@ -6,6 +6,7 @@ import { FileTree } from '@renderer/components/FileTree'
 import { GitChanges } from '@renderer/components/GitChanges'
 import { AgentList } from '@renderer/components/AgentList'
 import { BrowserTabs } from '@renderer/components/BrowserTabs'
+import { GraphPanel } from '@renderer/components/GraphPanel'
 
 type RightPanelMode = 'panel' | 'browser'
 
@@ -84,6 +85,7 @@ export function RightPanel(): JSX.Element {
   const [mode, setMode] = useState<RightPanelMode>('panel')
   const [filesCollapsed, setFilesCollapsed] = useState(false)
   const [agentsCollapsed, setAgentsCollapsed] = useState(false)
+  const [graphCollapsed, setGraphCollapsed] = useState(true)
 
   const fileCount = tree?.children?.length ?? 0
 
@@ -161,6 +163,16 @@ export function RightPanel(): JSX.Element {
               onToggle={() => setAgentsCollapsed((c) => !c)}
             />
             {!agentsCollapsed && <AgentList />}
+          </div>
+
+          {/* Graph section */}
+          <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)' }}>
+            <CollapsibleSectionHeader
+              label="Graph"
+              collapsed={graphCollapsed}
+              onToggle={() => setGraphCollapsed((c) => !c)}
+            />
+            {!graphCollapsed && <GraphPanel />}
           </div>
 
           {/* Git changes section */}
