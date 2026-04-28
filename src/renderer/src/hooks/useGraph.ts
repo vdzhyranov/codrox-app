@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ipc } from '@renderer/lib/ipc'
 import type { GraphStats, GraphSubgraph } from '@shared/types/graph'
 
@@ -19,6 +19,8 @@ export function useGraph(workspacePath: string | null): UseGraph {
   const [query, setQuery] = useState('')
   const [isIndexing, setIsIndexing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+  // Monotonic token; only the latest in-flight request is allowed to update results.
+  const reqToken = useRef(0)
 
   // Load stats whenever the workspace changes.
   useEffect(() => {
@@ -28,9 +30,14 @@ export function useGraph(workspacePath: string | null): UseGraph {
       return
     }
     let cancelled = false
-    ipc.invoke('graph:stats', { workspacePath }).then((s) => {
-      if (!cancelled) setStats(s)
-    })
+    ipc
+      .invoke('graph:stats', { workspacePath })
+      .then((s) => {
+        if (!cancelled) setStats(s)
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('graph:stats failed', err)
+      })
     return () => {
       cancelled = true
     }
@@ -44,12 +51,15 @@ export function useGraph(workspacePath: string | null): UseGraph {
       return
     }
     const handle = setTimeout(async () => {
+      const myToken = ++reqToken.current
       setIsSearching(true)
       try {
         const r = await ipc.invoke('graph:search', { workspacePath, q: query, limit: 50 })
-        setResults(r)
+        if (myToken === reqToken.current) setResults(r)
+      } catch (err) {
+        console.error('graph:search failed', err)
       } finally {
-        setIsSearching(false)
+        if (myToken === reqToken.current) setIsSearching(false)
       }
     }, 150)
     return () => clearTimeout(handle)
@@ -61,6 +71,8 @@ export function useGraph(workspacePath: string | null): UseGraph {
     try {
       const s = await ipc.invoke('graph:reindex', { workspacePath })
       setStats(s)
+    } catch (err) {
+      console.error('graph:reindex failed', err)
     } finally {
       setIsIndexing(false)
     }
@@ -69,8 +81,13 @@ export function useGraph(workspacePath: string | null): UseGraph {
   const loadNeighbors = useCallback(
     async (nodeId: string) => {
       if (!workspacePath) return
-      const r = await ipc.invoke('graph:neighbors', { workspacePath, nodeId })
-      setResults(r)
+      const myToken = ++reqToken.current
+      try {
+        const r = await ipc.invoke('graph:neighbors', { workspacePath, nodeId })
+        if (myToken === reqToken.current) setResults(r)
+      } catch (err) {
+        console.error('graph:neighbors failed', err)
+      }
     },
     [workspacePath]
   )

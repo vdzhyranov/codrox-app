@@ -21,10 +21,10 @@ export class ConceptIndexer {
   index(): IndexedConcepts {
     const out: IndexedConcepts = { conceptNodes: [], relatedToEdges: [] }
     const candidates = [
-      join(this.workspaceRoot, 'CLAUDE.md'),
-      join(this.workspaceRoot, '.claude', 'CLAUDE.md')
+      { path: join(this.workspaceRoot, 'CLAUDE.md'), source: 'CLAUDE.md' },
+      { path: join(this.workspaceRoot, '.claude', 'CLAUDE.md'), source: '.claude/CLAUDE.md' }
     ]
-    for (const path of candidates) {
+    for (const { path, source } of candidates) {
       if (!existsSync(path)) continue
       let text: string
       try {
@@ -32,26 +32,28 @@ export class ConceptIndexer {
       } catch {
         continue
       }
-      this.parseInto(text, out)
+      this.parseInto(text, source, out)
     }
     return out
   }
 
-  private parseInto(text: string, out: IndexedConcepts): void {
+  private parseInto(text: string, source: string, out: IndexedConcepts): void {
     const lines = text.split('\n')
     let currentConcept: GraphNode | null = null
     const now = Date.now()
+    const sourceSlug = slugify(source)
 
     for (const line of lines) {
       const heading = line.match(/^(#{2,3})\s+(.+?)\s*$/)
       if (heading) {
         const title = heading[2]
-        const id = `concept:${slugify(title)}`
+        // Namespace by source so the same heading in different files doesn't collide.
+        const id = `concept:${sourceSlug}#${slugify(title)}`
         currentConcept = {
           id,
           type: 'concept',
           label: title,
-          meta: { source: 'CLAUDE.md' },
+          meta: { source },
           updatedAt: now
         }
         out.conceptNodes.push(currentConcept)

@@ -12,5 +12,6 @@ coverage/
 *.key
 .omc/
 .claude/
+.codrox/
 .forge/
 *.tsbuildinfo

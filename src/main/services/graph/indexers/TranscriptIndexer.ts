@@ -1,5 +1,5 @@
-import { readFileSync, statSync } from 'fs'
-import { relative, sep } from 'path'
+import { closeSync, openSync, readFileSync, readSync, statSync } from 'fs'
+import { sep } from 'path'
 import type { GraphEdge, GraphNode } from '@shared/types/graph'
 
 const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024
@@ -31,11 +31,26 @@ export function indexTranscript(
     return result
   }
   if (!stat.isFile() || stat.size === 0) return result
-  // Cap parse work to avoid pathological large transcripts blocking reindex.
-  const text =
-    stat.size > MAX_TRANSCRIPT_BYTES
-      ? readFileSync(outputPath, { encoding: 'utf-8' }).slice(0, MAX_TRANSCRIPT_BYTES)
-      : readFileSync(outputPath, 'utf-8')
+  // Read at most MAX_TRANSCRIPT_BYTES off the front of the file so oversized
+  // transcripts don't blow up memory before being truncated.
+  let text: string
+  if (stat.size > MAX_TRANSCRIPT_BYTES) {
+    const buf = Buffer.allocUnsafe(MAX_TRANSCRIPT_BYTES)
+    let fd: number
+    try {
+      fd = openSync(outputPath, 'r')
+    } catch {
+      return result
+    }
+    try {
+      const bytesRead = readSync(fd, buf, 0, MAX_TRANSCRIPT_BYTES, 0)
+      text = buf.slice(0, bytesRead).toString('utf-8')
+    } finally {
+      closeSync(fd)
+    }
+  } else {
+    text = readFileSync(outputPath, 'utf-8')
+  }
 
   const sessionId = `agent:${agentId}`
   const seen = new Set<string>()
@@ -69,6 +84,3 @@ export function indexTranscript(
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
-
-// Mark `relative` as used so noUnusedImports stays happy if a future revision needs it.
-void relative

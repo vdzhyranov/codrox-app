@@ -7,11 +7,14 @@ type Listener = (worktreeId: string, events: FileChangeEvent[]) => void
 class FileWatcher {
   private watchers: Map<string, AsyncSubscription> = new Map()
   private listeners: Set<Listener> = new Set()
+  private legacyCallback: Listener | null = null
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map()
   private pendingEvents: Map<string, FileChangeEvent[]> = new Map()
 
-  /** Legacy single-callback API; preserved for the existing IPC bridge. */
+  /** Legacy single-callback API: replaces (not appends) the previous callback. */
   setCallback(cb: Listener): void {
+    if (this.legacyCallback) this.listeners.delete(this.legacyCallback)
+    this.legacyCallback = cb
     this.listeners.add(cb)
   }
 

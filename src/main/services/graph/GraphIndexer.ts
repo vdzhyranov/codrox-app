@@ -65,10 +65,11 @@ export class GraphIndexer {
 
   /** Remove a file's nodes/edges (used when a file is deleted). */
   removeFileAbs(absPath: string): void {
-    // Caller passes absolute path; we need the relative form to compute the node ID.
-    // Delegate via FileIndexer: it knows the workspace root.
-    const fakeIndex = this.fileIndexer.idForAbs(absPath)
-    if (!fakeIndex) return
-    this.store.deleteNode(fakeIndex)
+    const nodeId = this.fileIndexer.idForAbs(absPath)
+    if (!nodeId) return
+    // Symbols defined by the file would otherwise outlive it: delete them first,
+    // then drop the file node (cascade clears any remaining edges).
+    this.store.deleteSymbolsForFile(nodeId)
+    this.store.deleteNode(nodeId)
   }
 }

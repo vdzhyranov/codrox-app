@@ -1,3 +1,4 @@
+import { isAbsolute, relative } from 'path'
 import { GraphStore } from './GraphStore'
 import { GraphIndexer } from './GraphIndexer'
 import type { SubAgentInfo } from '../SubAgentWatcher'
@@ -88,7 +89,8 @@ class GraphService {
   private findOwningWorkspace(absPath: string): string | null {
     let best: string | null = null
     for (const ws of this.byWorkspace.keys()) {
-      if (absPath.startsWith(ws + '/') && (!best || ws.length > best.length)) {
+      const rel = relative(ws, absPath)
+      if (!rel.startsWith('..') && !isAbsolute(rel) && (!best || ws.length > best.length)) {
         best = ws
       }
     }

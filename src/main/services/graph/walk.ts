@@ -26,9 +26,6 @@ export function* walkSync(root: string, depth = 0): Generator<string> {
     return
   }
   for (const e of entries) {
-    if (e.name.startsWith('.') && e.name !== '.' && depth === 0) {
-      // Skip dotfiles at root unless explicitly walked
-    }
     const full = join(root, e.name)
     if (e.isDirectory()) {
       if (IGNORE_DIRS.has(e.name)) continue

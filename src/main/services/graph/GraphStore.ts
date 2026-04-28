@@ -108,6 +108,17 @@ export class GraphStore {
     this.db.prepare('DELETE FROM nodes WHERE id = ?').run(id)
   }
 
+  /** Delete all symbol nodes that the given file defines. Run before deleting the file. */
+  deleteSymbolsForFile(fileNodeId: string): void {
+    this.db
+      .prepare(
+        `DELETE FROM nodes WHERE id IN (
+           SELECT to_id FROM edges WHERE from_id = ? AND relation = 'defines'
+         )`
+      )
+      .run(fileNodeId)
+  }
+
   getNode(id: string): GraphNode | null {
     const row = this.db
       .prepare('SELECT id, type, label, meta, updated_at FROM nodes WHERE id = ?')
@@ -120,10 +131,12 @@ export class GraphStore {
 
   searchNodes(query: string, limit = 30): GraphNode[] {
     if (!query.trim()) return []
+    // FTS5: wrap each token in double quotes so operators (-, @, =, *, etc.)
+    // are treated as literals; double internal quotes per FTS5 escape rules.
     const ftsQuery = query
       .split(/\s+/)
       .filter(Boolean)
-      .map((t) => `${t}*`)
+      .map((t) => `"${t.replace(/"/g, '""')}"*`)
       .join(' ')
     const rows = this.db
       .prepare(

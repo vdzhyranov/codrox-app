@@ -36,15 +36,15 @@ export class GitIndexer {
       raw = await git.raw([
         'log',
         `--max-count=${COMMIT_LIMIT}`,
-        '--pretty=format:__C__%H|%aI|%s',
+        // %x00 = null byte; collision-proof commit-record delimiter.
+        '--pretty=format:%x00%H|%aI|%s',
         '--name-only'
       ])
     } catch {
       return { commitNodes, modifiedByEdges }
     }
 
-    // Parse: each commit starts with __C__<hash>|<iso-date>|<subject>, followed by file paths.
-    const blocks = raw.split('__C__').filter(Boolean)
+    const blocks = raw.split('\x00').filter(Boolean)
     for (const block of blocks) {
       const lines = block.split('\n')
       const header = lines[0]
