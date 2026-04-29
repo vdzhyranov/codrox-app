@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAgentStore } from '@renderer/store/agentStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
+import { TokenUsagePanel } from '@renderer/components/TokenUsagePanel'
 import type { AgentInfo } from '@renderer/store/agentStore'
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
@@ -384,6 +385,8 @@ export function AgentPanel(): JSX.Element {
       >
         {agents.length} agent{agents.length !== 1 ? 's' : ''} · {running.length} active
       </div>
+
+      <TokenUsagePanel />
     </div>
   )
 }

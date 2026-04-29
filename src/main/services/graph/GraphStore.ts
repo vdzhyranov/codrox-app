@@ -9,6 +9,7 @@ import type {
   GraphSource,
   GraphStats
 } from '@shared/types/graph'
+import type { TokenUsageRecord, TokenSummary } from '@shared/types/tokens'
 
 /**
  * Bumped when the on-disk schema or meta-stamping conventions change in a way
@@ -17,8 +18,9 @@ import type {
  *
  * v1 = pre-source-stamping (no `source` column on edges, no `meta.source` on nodes).
  * v2 = adds `source` column on edges, stamps `meta.source` on every node.
+ * v3 = adds `token_usage` table for per-worktree token consumption tracking.
  */
-export const GRAPH_SCHEMA_VERSION = 2
+export const GRAPH_SCHEMA_VERSION = 3
 
 /**
  * One SQLite database per workspace, stored at `<workspacePath>/.codrox/knowledge.db`.
@@ -87,6 +89,20 @@ export class GraphStore {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS token_usage (
+        id                    TEXT PRIMARY KEY,
+        agent_id              TEXT NOT NULL,
+        git_branch            TEXT NOT NULL,
+        model                 TEXT NOT NULL,
+        started_at            INTEGER NOT NULL,
+        input_tokens          INTEGER NOT NULL DEFAULT 0,
+        output_tokens         INTEGER NOT NULL DEFAULT 0,
+        cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_read_tokens     INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_token_usage_branch  ON token_usage(git_branch);
+      CREATE INDEX IF NOT EXISTS idx_token_usage_started ON token_usage(started_at);
     `)
   }
 
@@ -96,13 +112,15 @@ export class GraphStore {
    */
   private migrate(): void {
     // v1 → v2: add `source` column to edges. Existing rows default to 'indexer'.
-    const cols = this.db.prepare(`PRAGMA table_info(edges)`).all() as Array<{ name: string }>
-    if (!cols.some((c) => c.name === 'source')) {
+    const edgeCols = this.db.prepare(`PRAGMA table_info(edges)`).all() as Array<{ name: string }>
+    if (!edgeCols.some((c) => c.name === 'source')) {
       this.db.exec(
         `ALTER TABLE edges ADD COLUMN source TEXT NOT NULL DEFAULT 'indexer';
          CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source);`
       )
     }
+    // v2 → v3: token_usage table created in initSchema via CREATE IF NOT EXISTS.
+    // No destructive migration needed.
     this.db
       .prepare(
         `INSERT INTO meta (key, value) VALUES ('schema_version', ?)
@@ -384,6 +402,110 @@ export class GraphStore {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value`
       )
       .run(String(ts))
+  }
+
+  hasTokenUsage(agentId: string): boolean {
+    const row = this.db
+      .prepare('SELECT 1 FROM token_usage WHERE agent_id = ? LIMIT 1')
+      .get(agentId)
+    return row !== undefined
+  }
+
+  upsertTokenUsage(record: TokenUsageRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO token_usage
+           (id, agent_id, git_branch, model, started_at,
+            input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           input_tokens          = excluded.input_tokens,
+           output_tokens         = excluded.output_tokens,
+           cache_creation_tokens = excluded.cache_creation_tokens,
+           cache_read_tokens     = excluded.cache_read_tokens`
+      )
+      .run(
+        record.id,
+        record.agentId,
+        record.gitBranch,
+        record.model,
+        record.startedAt,
+        record.inputTokens,
+        record.outputTokens,
+        record.cacheCreationTokens,
+        record.cacheReadTokens
+      )
+  }
+
+  getTokenHistory(): TokenUsageRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, agent_id, git_branch, model, started_at,
+                input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens
+         FROM token_usage
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+        id: string; agent_id: string; git_branch: string; model: string; started_at: number
+        input_tokens: number; output_tokens: number
+        cache_creation_tokens: number; cache_read_tokens: number
+      }>
+    return rows.map((r) => ({
+      id: r.id,
+      agentId: r.agent_id,
+      gitBranch: r.git_branch,
+      model: r.model,
+      startedAt: r.started_at,
+      inputTokens: r.input_tokens,
+      outputTokens: r.output_tokens,
+      cacheCreationTokens: r.cache_creation_tokens,
+      cacheReadTokens: r.cache_read_tokens,
+    }))
+  }
+
+  getTokenSummary(): TokenSummary {
+    const rows = this.db
+      .prepare(
+        `SELECT model,
+                SUM(input_tokens)          AS input_tokens,
+                SUM(output_tokens)         AS output_tokens,
+                SUM(cache_creation_tokens) AS cache_creation_tokens,
+                SUM(cache_read_tokens)     AS cache_read_tokens,
+                COUNT(*)                   AS session_count
+         FROM token_usage
+         GROUP BY model`
+      )
+      .all() as Array<{
+        model: string
+        input_tokens: number; output_tokens: number
+        cache_creation_tokens: number; cache_read_tokens: number
+        session_count: number
+      }>
+
+    const summary: TokenSummary = {
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheCreationTokens: 0,
+      totalCacheReadTokens: 0,
+      sessionCount: 0,
+      byModel: {},
+    }
+
+    for (const r of rows) {
+      summary.totalInputTokens         += r.input_tokens
+      summary.totalOutputTokens        += r.output_tokens
+      summary.totalCacheCreationTokens += r.cache_creation_tokens
+      summary.totalCacheReadTokens     += r.cache_read_tokens
+      summary.sessionCount             += r.session_count
+      summary.byModel[r.model] = {
+        inputTokens:          r.input_tokens,
+        outputTokens:         r.output_tokens,
+        cacheCreationTokens:  r.cache_creation_tokens,
+        cacheReadTokens:      r.cache_read_tokens,
+      }
+    }
+
+    return summary
   }
 
   close(): void {

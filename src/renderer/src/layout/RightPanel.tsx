@@ -7,6 +7,7 @@ import { GitChanges } from '@renderer/components/GitChanges'
 import { AgentList } from '@renderer/components/AgentList'
 import { BrowserTabs } from '@renderer/components/BrowserTabs'
 import { GraphPanel } from '@renderer/components/GraphPanel'
+import { TokenUsagePanel } from '@renderer/components/TokenUsagePanel'
 
 type RightPanelMode = 'panel' | 'browser'
 
@@ -85,6 +86,7 @@ export function RightPanel(): JSX.Element {
   const [mode, setMode] = useState<RightPanelMode>('panel')
   const [filesCollapsed, setFilesCollapsed] = useState(false)
   const [agentsCollapsed, setAgentsCollapsed] = useState(false)
+  const [tokensCollapsed, setTokensCollapsed] = useState(false)
   const [graphCollapsed, setGraphCollapsed] = useState(true)
 
   const fileCount = tree?.children?.length ?? 0
@@ -163,6 +165,16 @@ export function RightPanel(): JSX.Element {
               onToggle={() => setAgentsCollapsed((c) => !c)}
             />
             {!agentsCollapsed && <AgentList />}
+          </div>
+
+          {/* Token usage section */}
+          <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)' }}>
+            <CollapsibleSectionHeader
+              label="Token Usage"
+              collapsed={tokensCollapsed}
+              onToggle={() => setTokensCollapsed((c) => !c)}
+            />
+            {!tokensCollapsed && <TokenUsagePanel />}
           </div>
 
           {/* Graph section */}

@@ -4,6 +4,7 @@ import { GraphIndexer } from './GraphIndexer'
 import type { SubAgentInfo } from '../SubAgentWatcher'
 import type { FileChangeEvent } from '@shared/types/filesystem'
 import type { GraphNodeType, GraphRelation, GraphStats, GraphSubgraph } from '@shared/types/graph'
+import type { TokenUsageRecord, TokenSummary } from '@shared/types/tokens'
 
 /**
  * Owns one GraphStore + GraphIndexer per open workspace, keyed by workspace path.
@@ -99,6 +100,22 @@ class GraphService {
       }
     }
     return best
+  }
+
+  recordTokenUsage(workspacePath: string, record: TokenUsageRecord): void {
+    this.open(workspacePath).store.upsertTokenUsage(record)
+  }
+
+  hasTokenUsage(workspacePath: string, agentId: string): boolean {
+    return this.open(workspacePath).store.hasTokenUsage(agentId)
+  }
+
+  getTokenHistory(workspacePath: string): TokenUsageRecord[] {
+    return this.open(workspacePath).store.getTokenHistory()
+  }
+
+  getTokenSummary(workspacePath: string): TokenSummary {
+    return this.open(workspacePath).store.getTokenSummary()
   }
 
   closeAll(): void {
