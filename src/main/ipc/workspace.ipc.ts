@@ -12,6 +12,7 @@ import type { Worktree, SessionData } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
 
+
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   // Set up the worktree watcher callback once — fires worktree:changed to renderer
   worktreeWatcher.setCallback((workspaceId: string) => {

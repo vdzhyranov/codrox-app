@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
