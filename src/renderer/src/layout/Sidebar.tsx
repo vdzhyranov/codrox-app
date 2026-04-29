@@ -442,6 +442,40 @@ function WorktreeNode({
       >
         {worktree.branch || worktree.name}
       </span>
+      {/* active Claude session indicator */}
+      {worktree.hasActiveSession && (
+        <span
+          title="Claude session active"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'var(--green, #4ade80)',
+            flexShrink: 0,
+            boxShadow: '0 0 4px var(--green, #4ade80)',
+          }}
+        />
+      )}
+      {/* external worktree badge */}
+      {worktree.isExternal && (
+        <span
+          title="Created outside Codrox"
+          style={{
+            fontSize: 8,
+            color: 'var(--text3)',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border, rgba(255,255,255,.1))',
+            borderRadius: 3,
+            padding: '0 4px',
+            fontFamily: 'var(--mono)',
+            flexShrink: 0,
+            lineHeight: '14px',
+            letterSpacing: '0.04em',
+          }}
+        >
+          ext
+        </span>
+      )}
       {/* linked Linear task badge */}
       {linkedTask && (
         <span

@@ -28,6 +28,9 @@ class PersistenceService {
         key TEXT PRIMARY KEY,
         value_json TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS known_worktrees (
+        path TEXT PRIMARY KEY
+      );
     `)
   }
 
@@ -89,6 +92,19 @@ class PersistenceService {
     this.db
       .prepare('INSERT INTO app_state (key, value_json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json')
       .run(key, json)
+  }
+
+  registerWorktree(path: string): void {
+    this.db.prepare('INSERT OR IGNORE INTO known_worktrees (path) VALUES (?)').run(path)
+  }
+
+  unregisterWorktree(path: string): void {
+    this.db.prepare('DELETE FROM known_worktrees WHERE path = ?').run(path)
+  }
+
+  isKnownWorktree(path: string): boolean {
+    const row = this.db.prepare('SELECT 1 FROM known_worktrees WHERE path = ?').get(path)
+    return row !== undefined
   }
 
   saveSession(data: SessionData): void {

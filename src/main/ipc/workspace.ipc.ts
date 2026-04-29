@@ -2,6 +2,7 @@ import { IpcMain, BrowserWindow, dialog } from 'electron'
 import { basename, join } from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { existsSync, readdirSync, statSync } from 'fs'
 import { persistenceService } from '../services/PersistenceService'
 import { workspaceSetup } from '../services/WorkspaceSetup'
 import { worktreeWatcher } from '../services/WorktreeWatcher'
@@ -9,6 +10,28 @@ import { claudeEnvManager } from '../services/ClaudeEnvManager'
 import type { Worktree, SessionData } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
+
+function hasActiveClaudeSession(worktreePath: string): boolean {
+  try {
+    const uid = typeof process.getuid === 'function' ? process.getuid() : 501
+    const projectKey = worktreePath.replace(/\//g, '-')
+    const baseDir = `/private/tmp/claude-${uid}/${projectKey}`
+    if (!existsSync(baseDir)) return false
+
+    const ACTIVE_MS = 60_000
+    const now = Date.now()
+    for (const entry of readdirSync(baseDir)) {
+      const fullPath = join(baseDir, entry)
+      try {
+        const stat = statSync(fullPath)
+        if (stat.isDirectory() && now - stat.mtimeMs < ACTIVE_MS) return true
+      } catch { /* ignore */ }
+    }
+    return false
+  } catch {
+    return false
+  }
+}
 
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   // Set up the worktree watcher callback once — fires worktree:changed to renderer
@@ -101,6 +124,7 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
         cwd: workspacePath
       })
+      persistenceService.registerWorktree(worktreePath)
       // Use path as ID — consistent with worktree:list
       const worktree: Worktree = {
         id: worktreePath,
@@ -108,7 +132,8 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
         path: worktreePath,
         branch,
         name,
-        isMain: false
+        isMain: false,
+        isExternal: false,
       }
       return worktree
     }
@@ -135,13 +160,17 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
           ? branchLine.replace('branch refs/heads/', '').trim()
           : '(detached)'
         const isMain = path === workspacePath
+        const isExternal = !isMain && !persistenceService.isKnownWorktree(path)
+        const hasActiveSession = isExternal ? hasActiveClaudeSession(path) : false
         worktrees.push({
           id: path, // use path as stable id
           workspaceId,
           path,
           branch,
           name: isMain ? basename(workspacePath) : basename(path),
-          isMain
+          isMain,
+          isExternal,
+          hasActiveSession,
         })
       }
       return worktrees
@@ -156,11 +185,13 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       try {
         await execFileAsync('git', ['worktree', 'remove', '--force', payload.worktreePath], opts)
         await execFileAsync('git', ['worktree', 'prune'], opts).catch(() => {})
+        persistenceService.unregisterWorktree(payload.worktreePath)
         return { success: true }
       } catch {
         try {
           await execFileAsync('git', ['worktree', 'remove', '--force', '--force', payload.worktreePath], opts)
           await execFileAsync('git', ['worktree', 'prune'], opts).catch(() => {})
+          persistenceService.unregisterWorktree(payload.worktreePath)
           return { success: true }
         } catch {
           return { success: false }

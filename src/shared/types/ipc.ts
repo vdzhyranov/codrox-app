@@ -43,6 +43,14 @@ export interface IpcChannels {
     request: { workspaceId: string; workspacePath: string; worktreePath: string }
     response: { success: boolean }
   }
+  'worktree:watch': {
+    request: { workspaceId: string; workspacePath: string }
+    response: void
+  }
+  'worktree:unwatch': {
+    request: { workspaceId: string }
+    response: void
+  }
   'git:renameBranch': {
     request: { worktreePath: string; oldName: string; newName: string }
     response: void
@@ -203,6 +211,7 @@ export interface IpcEventChannels {
   'pty:exit': { id: string; exitCode: number }
   'fs:changed': { worktreeId: string; events: FileChangeEvent[] }
   'settings:zoomChanged': { level: number }
+  'worktree:changed': { workspaceId: string }
 }
 
 // Helper types for type-safe invoke/listen
