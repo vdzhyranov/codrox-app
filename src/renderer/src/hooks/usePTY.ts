@@ -8,12 +8,13 @@ import '@xterm/xterm/css/xterm.css'
 interface UsePTYOptions {
   ptyId: string
   worktreeId: string
+  workspaceId?: string
   cwd: string
   type: 'claude' | 'terminal'
   containerRef: React.RefObject<HTMLDivElement | null>
 }
 
-export function usePTY({ ptyId, worktreeId, cwd, type, containerRef }: UsePTYOptions): void {
+export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef }: UsePTYOptions): void {
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -126,6 +127,7 @@ export function usePTY({ ptyId, worktreeId, cwd, type, containerRef }: UsePTYOpt
       window.api.invoke('pty:create', {
         id: ptyId,
         worktreeId,
+        workspaceId,
         cwd,
         type
       })
@@ -180,5 +182,5 @@ export function usePTY({ ptyId, worktreeId, cwd, type, containerRef }: UsePTYOpt
       }
       cleanup?.()
     }
-  }, [ptyId, worktreeId, cwd, type, containerRef])
+  }, [ptyId, worktreeId, workspaceId, cwd, type, containerRef])
 }

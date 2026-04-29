@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ipc } from '@renderer/lib/ipc'
-import type { GraphStats, GraphSubgraph } from '@shared/types/graph'
+import type { GraphNodeType, GraphStats, GraphSubgraph } from '@shared/types/graph'
 
 export interface UseGraph {
   stats: GraphStats | null
   results: GraphSubgraph
   query: string
   setQuery: (q: string) => void
+  nodeTypes: GraphNodeType[]
+  setNodeTypes: (types: GraphNodeType[]) => void
   reindex: () => Promise<void>
   loadNeighbors: (nodeId: string) => Promise<void>
   isIndexing: boolean
@@ -17,6 +19,7 @@ export function useGraph(workspacePath: string | null): UseGraph {
   const [stats, setStats] = useState<GraphStats | null>(null)
   const [results, setResults] = useState<GraphSubgraph>({ nodes: [], edges: [] })
   const [query, setQuery] = useState('')
+  const [nodeTypes, setNodeTypes] = useState<GraphNodeType[]>([])
   const [isIndexing, setIsIndexing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   // Monotonic token; only the latest in-flight request is allowed to update results.
@@ -54,7 +57,12 @@ export function useGraph(workspacePath: string | null): UseGraph {
       const myToken = ++reqToken.current
       setIsSearching(true)
       try {
-        const r = await ipc.invoke('graph:search', { workspacePath, q: query, limit: 50 })
+        const r = await ipc.invoke('graph:search', {
+          workspacePath,
+          q: query,
+          limit: 50,
+          nodeTypes: nodeTypes.length > 0 ? nodeTypes : undefined
+        })
         if (myToken === reqToken.current) setResults(r)
       } catch (err) {
         console.error('graph:search failed', err)
@@ -63,7 +71,7 @@ export function useGraph(workspacePath: string | null): UseGraph {
       }
     }, 150)
     return () => clearTimeout(handle)
-  }, [workspacePath, query])
+  }, [workspacePath, query, nodeTypes])
 
   const reindex = useCallback(async () => {
     if (!workspacePath) return
@@ -92,5 +100,5 @@ export function useGraph(workspacePath: string | null): UseGraph {
     [workspacePath]
   )
 
-  return { stats, results, query, setQuery, reindex, loadNeighbors, isIndexing, isSearching }
+  return { stats, results, query, setQuery, nodeTypes, setNodeTypes, reindex, loadNeighbors, isIndexing, isSearching }
 }

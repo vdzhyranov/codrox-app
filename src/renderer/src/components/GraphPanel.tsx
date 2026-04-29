@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useGraph } from '@renderer/hooks/useGraph'
 import { GraphHelpModal } from '@renderer/components/GraphHelpModal'
-import type { GraphNode, GraphSubgraph } from '@shared/types/graph'
+import type { GraphNode, GraphNodeType, GraphSubgraph } from '@shared/types/graph'
 
 const TYPE_COLOR: Record<GraphNode['type'], string> = {
   file: '#3b82f6',
@@ -10,6 +10,16 @@ const TYPE_COLOR: Record<GraphNode['type'], string> = {
   commit: '#22c55e',
   agent_session: '#eab308',
   concept: '#06b6d4'
+}
+
+const ALL_TYPES: GraphNodeType[] = ['file', 'symbol', 'commit', 'agent_session', 'concept']
+
+const TYPE_LABEL: Record<GraphNodeType, string> = {
+  file: 'File',
+  symbol: 'Symbol',
+  commit: 'Commit',
+  agent_session: 'Agent',
+  concept: 'Concept'
 }
 
 const CLAUDE_STROKE = '#f97316' // distinguishes Claude-authored nodes/edges
@@ -20,11 +30,19 @@ function isClaudeNode(node: GraphNode): boolean {
 
 export function GraphPanel(): JSX.Element | null {
   const workspacePath = useActiveWorktreePath()
-  const { stats, results, query, setQuery, reindex, loadNeighbors, isIndexing, isSearching } =
+  const { stats, results, query, setQuery, nodeTypes, setNodeTypes, reindex, loadNeighbors, isIndexing, isSearching } =
     useGraph(workspacePath)
   const [helpOpen, setHelpOpen] = useState(false)
 
   if (!workspacePath) return null
+
+  function toggleType(t: GraphNodeType): void {
+    if (nodeTypes.includes(t)) {
+      setNodeTypes(nodeTypes.filter((x) => x !== t))
+    } else {
+      setNodeTypes([...nodeTypes, t])
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 360 }}>
@@ -76,6 +94,45 @@ export function GraphPanel(): JSX.Element | null {
         >
           ?
         </button>
+      </div>
+
+      {/* Type-filter chips + color legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '0 12px 6px' }}>
+        {ALL_TYPES.map((t) => {
+          const active = nodeTypes.length === 0 || nodeTypes.includes(t)
+          return (
+            <button
+              key={t}
+              onClick={() => toggleType(t)}
+              title={`Toggle ${TYPE_LABEL[t]} nodes`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 7px',
+                fontSize: 'var(--fs-xs)',
+                background: active ? 'var(--surface2)' : 'transparent',
+                border: `1px solid ${active ? TYPE_COLOR[t] : 'var(--border)'}`,
+                color: active ? 'var(--text)' : 'var(--text3)',
+                borderRadius: 10,
+                cursor: 'pointer',
+                opacity: active ? 1 : 0.5
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: TYPE_COLOR[t],
+                  flexShrink: 0
+                }}
+              />
+              {TYPE_LABEL[t]}
+            </button>
+          )
+        })}
       </div>
 
       <div style={{ padding: '0 12px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
