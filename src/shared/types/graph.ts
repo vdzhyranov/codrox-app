@@ -16,12 +16,16 @@ export interface GraphNode {
   updatedAt: number
 }
 
+export type GraphSource = 'indexer' | 'claude'
+
 export interface GraphEdge {
   id: string
   fromId: string
   toId: string
   relation: GraphRelation
   weight: number
+  /** Who authored this edge. Defaults to 'indexer' when omitted at write time. */
+  source?: GraphSource
 }
 
 export interface GraphSubgraph {
@@ -33,4 +37,8 @@ export interface GraphStats {
   nodeCount: number
   edgeCount: number
   lastIndexedAt: number | null
+  /** Subset of nodeCount whose `meta.source === 'claude'`. */
+  claudeNodeCount: number
+  /** Subset of edgeCount whose `source === 'claude'`. */
+  claudeEdgeCount: number
 }

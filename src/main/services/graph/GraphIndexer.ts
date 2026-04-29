@@ -59,8 +59,9 @@ export class GraphIndexer {
     // Imported files may not exist as nodes yet; upsert stubs so edges have valid endpoints.
     for (const n of result.importedFileNodes) this.store.upsertNode(n)
     for (const n of result.symbolNodes) this.store.upsertNode(n)
-    this.store.replaceOutgoing(result.fileNode.id, 'imports', result.importEdges)
-    this.store.replaceOutgoing(result.fileNode.id, 'defines', result.defineEdges)
+    // 'indexer' scope: leaves any Claude-authored 'imports'/'defines' edges (rare, but possible) intact.
+    this.store.replaceOutgoingFromSource(result.fileNode.id, 'imports', 'indexer', result.importEdges)
+    this.store.replaceOutgoingFromSource(result.fileNode.id, 'defines', 'indexer', result.defineEdges)
   }
 
   /** Remove a file's nodes/edges (used when a file is deleted). */
