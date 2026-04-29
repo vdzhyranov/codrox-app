@@ -4,12 +4,19 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { persistenceService } from '../services/PersistenceService'
 import { workspaceSetup } from '../services/WorkspaceSetup'
+import { worktreeWatcher } from '../services/WorktreeWatcher'
 import { claudeEnvManager } from '../services/ClaudeEnvManager'
 import type { Worktree, SessionData } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
 
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
+  // Set up the worktree watcher callback once — fires worktree:changed to renderer
+  worktreeWatcher.setCallback((workspaceId: string) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('worktree:changed', { workspaceId })
+    }
+  })
   // Legacy: open workspace (kept for backward compat)
   ipcMain.handle('workspace:open', (_event, payload: { path: string }) => {
     const { path } = payload
@@ -64,6 +71,24 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     }
     return result.filePaths[0]
   })
+
+  // Start watching git metadata for worktree/branch changes
+  ipcMain.handle(
+    'worktree:watch',
+    async (_event, payload: { workspaceId: string; workspacePath: string }) => {
+      await worktreeWatcher.watch(payload.workspaceId, payload.workspacePath)
+      return { success: true }
+    }
+  )
+
+  // Stop watching a workspace's git metadata
+  ipcMain.handle(
+    'worktree:unwatch',
+    async (_event, payload: { workspaceId: string }) => {
+      await worktreeWatcher.unwatch(payload.workspaceId)
+      return { success: true }
+    }
+  )
 
   // Create a new git worktree
   ipcMain.handle(
