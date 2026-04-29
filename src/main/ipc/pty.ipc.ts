@@ -18,14 +18,16 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('pty:create', (_event, payload: {
     id: string
     worktreeId: string
+    workspaceId?: string
     cwd: string
     shell?: string
     args?: string[]
     type: 'claude' | 'terminal'
   }) => {
-    console.log('[PTY] Creating:', payload.id, payload.type, payload.cwd)
+    console.log('[PTY] Creating:', payload.id, payload.type, payload.cwd, payload.workspaceId ?? '(no workspace)')
     ptyManager.create(payload.id, {
       worktreeId: payload.worktreeId,
+      workspaceId: payload.workspaceId,
       cwd: payload.cwd,
       shell: payload.shell,
       args: payload.args,

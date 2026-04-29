@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
+import { useActiveWorkspaceId } from '@renderer/hooks/useActiveWorkspaceId'
 import type { LifecyclePhase, LifecycleState } from '@shared/types'
 
 // ─── Shared styles ───────────────────────────────────────────────
@@ -144,6 +145,7 @@ function PhaseTerminal({
 }: PhaseTerminalProps): JSX.Element {
   const [started, setStarted] = useState(autoStart)
   const containerRef = useRef<HTMLDivElement>(null)
+  const activeWorkspaceId = useActiveWorkspaceId()
 
   // Import xterm lazily when started
   useEffect(() => {
@@ -228,7 +230,13 @@ function PhaseTerminal({
         return true
       })
 
-      window.api.invoke('pty:create', { id, worktreeId: worktreePath, cwd: worktreePath, type })
+      window.api.invoke('pty:create', {
+        id,
+        worktreeId: worktreePath,
+        workspaceId: activeWorkspaceId ?? undefined,
+        cwd: worktreePath,
+        type,
+      })
 
       // Send initial prompt after a short delay to let Claude CLI start
       if (initialPrompt && type === 'claude') {

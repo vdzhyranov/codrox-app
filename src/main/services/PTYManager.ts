@@ -1,9 +1,11 @@
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
+import { claudeEnvManager } from './ClaudeEnvManager'
 
 interface PTYSession {
   pty: IPty
   worktreeId: string
+  workspaceId?: string
   type: 'claude' | 'terminal'
   /** Epoch ms of last data received from this PTY */
   lastOutputAt: number
@@ -34,6 +36,7 @@ class PTYManager {
     id: string,
     options: {
       worktreeId: string
+      workspaceId?: string
       cwd: string
       shell?: string
       args?: string[]
@@ -49,8 +52,21 @@ class PTYManager {
     const shell = options.shell || defaultShell
     const args = options.args || []
 
+    // If we know which workspace this PTY belongs to, materialize the
+    // workspace's fake $HOME and inject the Claude-isolation env vars.
+    let workspaceEnv: Record<string, string> = {}
+    if (options.workspaceId) {
+      try {
+        claudeEnvManager.materializeWorkspaceHome(options.workspaceId)
+        workspaceEnv = claudeEnvManager.getEnvForWorkspace(options.workspaceId)
+      } catch (err) {
+        console.warn('[PTYManager] failed to materialize workspace home:', err)
+      }
+    }
+
     const env = {
       ...process.env,
+      ...workspaceEnv,
       ...options.env,
       TERM: 'xterm-256color',
       LANG: process.env.LANG || 'en_US.UTF-8',
@@ -69,6 +85,7 @@ class PTYManager {
       const session: PTYSession = {
         pty: ptyProcess,
         worktreeId: options.worktreeId,
+        workspaceId: options.workspaceId,
         type: options.type,
         lastOutputAt: Date.now()
       }
