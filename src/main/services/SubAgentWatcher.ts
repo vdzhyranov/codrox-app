@@ -26,6 +26,10 @@ class SubAgentWatcher {
     this.watching = true
     this.knownAgents.clear()
 
+    // Claude Code's sub-agent task transcripts live under /private/tmp/claude-<uid>/.
+    // The path is uid-scoped, not HOME-scoped, so the per-workspace fake $HOME
+    // injected by ClaudeEnvManager does not affect this lookup. Project key is
+    // derived from cwd (the workspace path), which is also stable.
     const projectKey = workspacePath.replace(/\//g, '-')
     const baseDir = `/private/tmp/claude-501/${projectKey}`
 

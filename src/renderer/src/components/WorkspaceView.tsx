@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState } from 'react'
 import { usePTY } from '@renderer/hooks/usePTY'
+import { useActiveWorkspaceId } from '@renderer/hooks/useActiveWorkspaceId'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { FileViewer } from '@renderer/components/FileViewer'
 import { AgentOutputViewer } from '@renderer/components/AgentOutputViewer'
@@ -122,8 +123,16 @@ interface PanelTerminalProps {
 
 function PanelTerminal({ sessionName, worktreePath, type }: PanelTerminalProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
+  const activeWorkspaceId = useActiveWorkspaceId()
 
-  usePTY({ ptyId: sessionName, worktreeId: sessionName, cwd: worktreePath, type, containerRef })
+  usePTY({
+    ptyId: sessionName,
+    worktreeId: sessionName,
+    workspaceId: activeWorkspaceId ?? undefined,
+    cwd: worktreePath,
+    type,
+    containerRef,
+  })
 
   return (
     <div

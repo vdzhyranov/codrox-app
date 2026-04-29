@@ -5,6 +5,7 @@ import { promisify } from 'util'
 import { persistenceService } from '../services/PersistenceService'
 import { workspaceSetup } from '../services/WorkspaceSetup'
 import { worktreeWatcher } from '../services/WorktreeWatcher'
+import { claudeEnvManager } from '../services/ClaudeEnvManager'
 import type { Worktree, SessionData } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -28,6 +29,14 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     const workspace = persistenceService.saveWorkspace({ path, name: basename(path) })
     // Best-effort setup: create .claude/ dir and CLAUDE.md if missing
     workspaceSetup.setupWorkspace(path).catch(() => {})
+    // Materialize the workspace's isolated Claude environment (fake $HOME with
+    // codrox-managed skills/hooks/commands). Best-effort: failure here should
+    // not block adding a workspace.
+    try {
+      claudeEnvManager.materializeWorkspaceHome(workspace.id)
+    } catch (err) {
+      console.warn('[workspace:add] materializeWorkspaceHome failed:', err)
+    }
     return workspace
   })
 
@@ -35,6 +44,9 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('workspace:remove', (_event, payload: { id: string }) => {
     try {
       persistenceService.removeWorkspace(payload.id)
+      // Tear down the workspace's isolated Claude home so the next workspace
+      // with the same id (unlikely, but possible after rebinding) starts fresh.
+      claudeEnvManager.destroyWorkspaceHome(payload.id)
       return { success: true }
     } catch {
       return { success: false }

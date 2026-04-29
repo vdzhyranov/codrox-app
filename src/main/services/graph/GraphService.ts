@@ -3,7 +3,7 @@ import { GraphStore } from './GraphStore'
 import { GraphIndexer } from './GraphIndexer'
 import type { SubAgentInfo } from '../SubAgentWatcher'
 import type { FileChangeEvent } from '@shared/types/filesystem'
-import type { GraphRelation, GraphStats, GraphSubgraph } from '@shared/types/graph'
+import type { GraphNodeType, GraphRelation, GraphStats, GraphSubgraph } from '@shared/types/graph'
 
 /**
  * Owns one GraphStore + GraphIndexer per open workspace, keyed by workspace path.
@@ -34,9 +34,13 @@ class GraphService {
     entry.indexer.recordAgentSession(info)
   }
 
-  search(workspacePath: string, query: string, limit = 30): GraphSubgraph {
-    const nodes = this.open(workspacePath).store.searchNodes(query, limit)
+  search(workspacePath: string, query: string, limit = 30, nodeTypes?: GraphNodeType[]): GraphSubgraph {
+    const nodes = this.open(workspacePath).store.searchNodes(query, limit, nodeTypes)
     return { nodes, edges: [] }
+  }
+
+  sweepOrphans(workspacePath: string): number {
+    return this.open(workspacePath).store.sweepOrphans()
   }
 
   neighbors(
