@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Workspace, Worktree, LifecyclePhase, WorktreeMode, LifecycleState } from '@shared/types'
+import type { Workspace, Worktree, WorktreeMode } from '@shared/types'
 
 interface WorkspaceState {
   workspaces: Workspace[]
@@ -7,8 +7,6 @@ interface WorkspaceState {
   activeWorktreeId: string | null
   // worktrees per workspace (keyed by workspaceId)
   worktreesByWorkspace: Record<string, Worktree[]>
-  // lifecycle state per worktree path
-  lifecycleByWorktree: Record<string, LifecycleState>
   // mode per worktree path
   modeByWorktree: Record<string, WorktreeMode>
 }
@@ -31,10 +29,7 @@ interface WorkspaceActions {
   // Remove a worktree
   removeWorktree: (workspaceId: string, workspacePath: string, worktreePath: string) => Promise<void>
 
-  // Lifecycle actions
   setWorktreeMode: (worktreePath: string, mode: WorktreeMode) => void
-  setLifecyclePhase: (worktreePath: string, phase: LifecyclePhase | null) => void
-  updateLifecycleData: (worktreePath: string, data: Partial<LifecycleState>) => void
 
   // Derived helpers (used by legacy consumers)
   // Returns the path of the active worktree (or active workspace root)
@@ -54,7 +49,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   activeWorkspaceId: null,
   activeWorktreeId: null,
   worktreesByWorkspace: {},
-  lifecycleByWorktree: {},
   modeByWorktree: {},
 
   // Derived: active worktree path
@@ -152,36 +146,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     })
   },
 
-  // ---- Lifecycle methods ----
-
   setWorktreeMode: (worktreePath: string, mode: WorktreeMode) => {
     set((state) => ({
       modeByWorktree: { ...state.modeByWorktree, [worktreePath]: mode }
     }))
-  },
-
-  setLifecyclePhase: (worktreePath: string, phase: LifecyclePhase | null) => {
-    set((state) => {
-      const existing = state.lifecycleByWorktree[worktreePath] ?? { phase: null }
-      return {
-        lifecycleByWorktree: {
-          ...state.lifecycleByWorktree,
-          [worktreePath]: { ...existing, phase }
-        }
-      }
-    })
-  },
-
-  updateLifecycleData: (worktreePath: string, data: Partial<LifecycleState>) => {
-    set((state) => {
-      const existing = state.lifecycleByWorktree[worktreePath] ?? { phase: null }
-      return {
-        lifecycleByWorktree: {
-          ...state.lifecycleByWorktree,
-          [worktreePath]: { ...existing, ...data }
-        }
-      }
-    })
   },
 
   // ---- Legacy shim methods ----

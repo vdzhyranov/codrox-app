@@ -29,32 +29,10 @@ export interface AppState {
   recentWorkspaces: Workspace[]
 }
 
-export type LifecyclePhase = 'propose' | 'grill' | 'research' | 'plan' | 'implement' | 'verify'
-
-export type WorktreeMode = 'terminal' | 'claude' | 'lifecycle' | null
+export type WorktreeMode = 'terminal' | 'claude' | null
 
 export interface SessionData {
   activeWorkspaceId: string | null
   activeWorktreeId: string | null
   modeByWorktree: Record<string, string>
-}
-
-export interface LifecycleState {
-  phase: LifecyclePhase | null
-  propose?: {
-    name: string
-    problem: string
-    solution: string
-    criteria: string
-    questions?: string
-  }
-  grillSummary?: string
-  researchSummary?: string
-  plan?: {
-    tasks: Array<{ id: string; title: string; done: boolean; effort?: string }>
-  }
-  implementNotes?: string
-  verify?: {
-    items: Array<{ id: string; label: string; passed: boolean | null }>
-  }
 }
