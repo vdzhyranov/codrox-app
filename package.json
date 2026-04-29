@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
@@ -69,7 +69,9 @@
       {
         "from": "resources/claude-runtime",
         "to": "claude-runtime",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
