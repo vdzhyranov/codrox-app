@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
+import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useGraph } from '@renderer/hooks/useGraph'
 import { GraphHelpModal } from '@renderer/components/GraphHelpModal'
 import type { GraphNode, GraphNodeType, GraphSubgraph } from '@shared/types/graph'
@@ -29,12 +30,18 @@ function isClaudeNode(node: GraphNode): boolean {
 }
 
 export function GraphPanel(): JSX.Element | null {
-  const workspacePath = useActiveWorktreePath()
+  // Use the main workspace path as the DB key so all worktrees share one graph.
+  const mainWorkspacePath = useWorkspaceStore((s) => {
+    const ws = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
+    return ws?.path ?? null
+  })
+  // Pass the active worktree path so reindex scans the right branch.
+  const activeWorktreePath = useActiveWorktreePath()
   const { stats, results, query, setQuery, nodeTypes, setNodeTypes, reindex, loadNeighbors, isIndexing, isSearching } =
-    useGraph(workspacePath)
+    useGraph(mainWorkspacePath, activeWorktreePath)
   const [helpOpen, setHelpOpen] = useState(false)
 
-  if (!workspacePath) return null
+  if (!mainWorkspacePath) return null
 
   function toggleType(t: GraphNodeType): void {
     if (nodeTypes.includes(t)) {

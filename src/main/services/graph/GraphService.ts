@@ -23,8 +23,8 @@ class GraphService {
     return entry
   }
 
-  async reindex(workspacePath: string): Promise<GraphStats> {
-    return this.open(workspacePath).indexer.reindexAll()
+  async reindex(workspacePath: string, scanPath?: string): Promise<GraphStats> {
+    return this.open(workspacePath).indexer.reindexAll(scanPath)
   }
 
   /** Record a freshly-spawned agent session in any open workspace's graph. */

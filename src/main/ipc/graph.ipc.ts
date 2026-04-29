@@ -10,8 +10,8 @@ export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
   })
 
 
-  ipcMain.handle('graph:reindex', (_e, payload: { workspacePath: string }) => {
-    return graphService.reindex(payload.workspacePath)
+  ipcMain.handle('graph:reindex', (_e, payload: { workspacePath: string; scanPath?: string }) => {
+    return graphService.reindex(payload.workspacePath, payload.scanPath)
   })
 
   ipcMain.handle('graph:search', (_e, payload: { workspacePath: string; q: string; limit?: number; nodeTypes?: GraphNodeType[] }) => {

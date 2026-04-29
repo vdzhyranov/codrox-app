@@ -15,15 +15,22 @@ export interface UseGraph {
   isSearching: boolean
 }
 
-export function useGraph(workspacePath: string | null): UseGraph {
+/**
+ * workspacePath  — the main workspace root, used as the DB key (shared across all worktrees).
+ * worktreePath   — the active worktree to scan when reindexing; defaults to workspacePath.
+ *                  Changing this triggers an automatic reindex so the graph stays in sync
+ *                  with the currently-checked-out branch.
+ */
+export function useGraph(workspacePath: string | null, worktreePath?: string | null): UseGraph {
   const [stats, setStats] = useState<GraphStats | null>(null)
   const [results, setResults] = useState<GraphSubgraph>({ nodes: [], edges: [] })
   const [query, setQuery] = useState('')
   const [nodeTypes, setNodeTypes] = useState<GraphNodeType[]>([])
   const [isIndexing, setIsIndexing] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  // Monotonic token; only the latest in-flight request is allowed to update results.
   const reqToken = useRef(0)
+  // Track the last worktree we indexed so we only reindex on actual worktree changes.
+  const lastIndexedKey = useRef<string | null>(null)
 
   // Load stats whenever the workspace changes.
   useEffect(() => {
@@ -45,6 +52,32 @@ export function useGraph(workspacePath: string | null): UseGraph {
       cancelled = true
     }
   }, [workspacePath])
+
+  // Auto-reindex when the active worktree changes (different branch = different files).
+  useEffect(() => {
+    if (!workspacePath) return
+    const scanPath = worktreePath ?? workspacePath
+    const key = `${workspacePath}::${scanPath}`
+    if (key === lastIndexedKey.current) return
+    lastIndexedKey.current = key
+
+    let cancelled = false
+    setIsIndexing(true)
+    ipc
+      .invoke('graph:reindex', { workspacePath, scanPath })
+      .then((s) => {
+        if (!cancelled) setStats(s)
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('graph:reindex failed', err)
+      })
+      .finally(() => {
+        if (!cancelled) setIsIndexing(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [workspacePath, worktreePath])
 
   // Debounced search.
   useEffect(() => {
@@ -75,16 +108,19 @@ export function useGraph(workspacePath: string | null): UseGraph {
 
   const reindex = useCallback(async () => {
     if (!workspacePath) return
+    const scanPath = worktreePath ?? workspacePath
     setIsIndexing(true)
     try {
-      const s = await ipc.invoke('graph:reindex', { workspacePath })
+      const s = await ipc.invoke('graph:reindex', { workspacePath, scanPath })
       setStats(s)
+      // Reset so the auto-effect re-arms for the current key after a manual reindex.
+      lastIndexedKey.current = `${workspacePath}::${scanPath}`
     } catch (err) {
       console.error('graph:reindex failed', err)
     } finally {
       setIsIndexing(false)
     }
-  }, [workspacePath])
+  }, [workspacePath, worktreePath])
 
   const loadNeighbors = useCallback(
     async (nodeId: string) => {

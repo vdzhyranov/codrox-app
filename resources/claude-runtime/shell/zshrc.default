@@ -3,13 +3,6 @@
 # Created once per workspace. Edit freely — Codrox will NOT overwrite this file.
 # To restore the default: delete this file; Codrox regenerates it on next launch.
 
-# ---- claude isolation ----
-# Scope the fake $HOME only to the claude process so that all other tools
-# (gh, git, npm, …) use the real user home without any extra configuration.
-if [ -n "$CODROX_WORKSPACE_HOME" ]; then
-  claude() { HOME="$CODROX_WORKSPACE_HOME" command claude "$@"; }
-fi
-
 # ---- oh-my-zsh ----
 if [ -d "$HOME/.oh-my-zsh" ]; then
   export ZSH="$HOME/.oh-my-zsh"

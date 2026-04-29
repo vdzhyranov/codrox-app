@@ -15,17 +15,34 @@ export class GraphIndexer {
   private agentIndexer: AgentIndexer
   private conceptIndexer: ConceptIndexer
 
-  constructor(private store: GraphStore, workspaceRoot: string) {
+  constructor(private store: GraphStore, private workspaceRoot: string) {
     this.fileIndexer = new FileIndexer(workspaceRoot)
     this.gitIndexer = new GitIndexer(workspaceRoot)
     this.agentIndexer = new AgentIndexer(workspaceRoot)
     this.conceptIndexer = new ConceptIndexer(workspaceRoot)
   }
 
-  /** Full reindex: files + symbols + git history + agent activity. */
-  async reindexAll(): Promise<GraphStats> {
-    for (const abs of this.fileIndexer.walk()) {
-      this.indexFileAbs(abs)
+  /**
+   * Full reindex: files + symbols + git history + agent activity.
+   *
+   * scanPath overrides where files are walked (e.g. a git worktree path).
+   * Git, agent, and concept indexers always use the workspace root so
+   * commit history and agent sessions stay in the shared workspace graph.
+   */
+  async reindexAll(scanPath?: string): Promise<GraphStats> {
+    // File scan: use worktree path when provided, otherwise workspace root.
+    const scanner = scanPath && scanPath !== this.workspaceRoot
+      ? new FileIndexer(scanPath)
+      : this.fileIndexer
+
+    for (const abs of scanner.walk()) {
+      const result = scanner.indexFile(abs)
+      if (!result) continue
+      this.store.upsertNode(result.fileNode)
+      for (const n of result.importedFileNodes) this.store.upsertNode(n)
+      for (const n of result.symbolNodes) this.store.upsertNode(n)
+      this.store.replaceOutgoingFromSource(result.fileNode.id, 'imports', 'indexer', result.importEdges)
+      this.store.replaceOutgoingFromSource(result.fileNode.id, 'defines', 'indexer', result.defineEdges)
     }
 
     const git = await this.gitIndexer.index()

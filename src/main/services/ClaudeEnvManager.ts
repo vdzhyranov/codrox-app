@@ -10,27 +10,25 @@ import {
   lstatSync,
   unlinkSync
 } from 'fs'
-import { join, dirname, resolve } from 'path'
-import { homedir } from 'os'
+import { join, dirname } from 'path'
+import { resolveMcpLaunchSpec } from './graph/mcpPath'
 
 /**
- * ClaudeEnvManager owns the per-workspace fake $HOME that Codrox passes to
- * every Claude Code PTY. This isolates auth, conversation history, MCP user
+ * ClaudeEnvManager owns the per-workspace Claude config directory that Codrox
+ * injects via CLAUDE_CONFIG_DIR. This isolates auth, conversation history, MCP
  * config, and project memory across workspaces while giving Codrox a clean
- * surface to inject skills, commands, agents, hooks, and KG access.
+ * surface to inject skills, commands, agents, and hooks.
  *
  * Layout under <userData>/codrox/:
  *   runtime/global/{skills,agents,commands,hooks}/   — bundled, app-managed
  *   runtime/version                                  — last materialized runtime version
- *   workspaces/<id>/home/                            — the fake $HOME for that workspace
- *   workspaces/<id>/home/.claude/...                 — per-workspace Claude config
+ *   workspaces/<id>/.claude/                         — per-workspace Claude config
  */
 
 const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop', 'SubagentStop'] as const
 type HookEvent = (typeof HOOK_EVENTS)[number]
 
-interface MaterializedHome {
-  home: string
+interface MaterializedWorkspace {
   claudeDir: string
 }
 
@@ -55,8 +53,8 @@ class ClaudeEnvManager {
     return join(this.baseDir(), 'workspaces', workspaceId)
   }
 
-  fakeHome(workspaceId: string): string {
-    return join(this.workspaceDir(workspaceId), 'home')
+  claudeDir(workspaceId: string): string {
+    return join(this.workspaceDir(workspaceId), '.claude')
   }
 
   /**
@@ -70,14 +68,13 @@ class ClaudeEnvManager {
       // Packaged app: extraResources copies resources/claude-runtime → resourcesPath
       join(process.resourcesPath || '', 'claude-runtime'),
       // electron-vite dev: __dirname is out/main, repo root is two up
-      resolve(__dirname, '..', '..', 'resources', 'claude-runtime'),
+      join(__dirname, '..', '..', 'resources', 'claude-runtime'),
       // Fallback: app root
       join(app.getAppPath(), 'resources', 'claude-runtime')
     ]
     for (const c of candidates) {
       if (c && existsSync(c)) return c
     }
-    // Return the first candidate so downstream errors point somewhere meaningful.
     return candidates[0]
   }
 
@@ -117,16 +114,14 @@ class ClaudeEnvManager {
   }
 
   /**
-   * Idempotently build the fake-home tree for a workspace. Codrox-owned skills/
+   * Idempotently build the per-workspace .claude directory. Codrox-owned skills/
    * agents/commands are exposed via symlinks so app updates flow through
    * automatically. User-added content lives under skills/user, etc., and is
    * never touched.
    */
-  materializeWorkspaceHome(workspaceId: string): MaterializedHome {
-    const home = this.fakeHome(workspaceId)
-    const claudeDir = join(home, '.claude')
+  materializeWorkspace(workspaceId: string, workspacePath?: string): MaterializedWorkspace {
+    const claudeDir = this.claudeDir(workspaceId)
 
-    mkdirSync(home, { recursive: true })
     mkdirSync(claudeDir, { recursive: true })
     mkdirSync(join(claudeDir, 'projects'), { recursive: true })
     mkdirSync(join(claudeDir, 'todos'), { recursive: true })
@@ -136,44 +131,35 @@ class ClaudeEnvManager {
     for (const kind of ['skills', 'agents', 'commands'] as const) {
       const dir = join(claudeDir, kind)
       mkdirSync(dir, { recursive: true })
-      // user-writable subdir (preserved across app updates)
       mkdirSync(join(dir, 'user'), { recursive: true })
-      // codrox-managed: symlink to global runtime
       this.refreshSymlink(
         join(dir, 'codrox'),
         join(this.globalRuntimeDir(), kind)
       )
     }
 
-    // Symlink git/ssh config so the claude process (which runs with HOME=<fake>)
-    // can still resolve user identity and SSH keys.
-    this.maybeSymlinkUserFile(home, '.gitconfig')
-    this.maybeSymlinkUserDir(home, '.ssh')
-    this.maybeSymlinkUserDir(home, '.config/git')
-    this.maybeSymlinkUserDir(home, '.config/gh')
-
-    // Seed a default .zshrc the first time we materialize the home so terminal
-    // PTYs get a sensible interactive shell. We never overwrite — once created,
-    // users own it.
-    this.seedShellConfigIfMissing(home)
-
-    // Generate settings.json (merged: codrox-managed entries + workspace overrides).
     this.writeSettings(workspaceId, claudeDir)
 
-    return { home, claudeDir }
+    if (workspacePath) {
+      this.writeMcpConfig(claudeDir, workspacePath)
+    }
+
+    return { claudeDir }
+  }
+
+  /** @deprecated Use materializeWorkspace */
+  materializeWorkspaceHome(workspaceId: string, workspacePath?: string): MaterializedWorkspace {
+    return this.materializeWorkspace(workspaceId, workspacePath)
   }
 
   /**
-   * Environment variables to merge into the PTY env when spawning Claude (or any
-   * shell that may launch Claude) inside a workspace.
+   * Environment variables to inject into every PTY spawned for a workspace.
+   * CLAUDE_CONFIG_DIR redirects Claude's config away from ~/.claude so each
+   * workspace has its own isolated history, settings, and MCP config.
    */
   getEnvForWorkspace(workspaceId: string): Record<string, string> {
     const env: Record<string, string> = {
-      // Expose the fake home path so PTYs can set HOME only for the claude
-      // process rather than for the entire shell session. Tools like gh, git,
-      // npm etc. continue to see the real $HOME and need no special treatment.
-      CODROX_WORKSPACE_HOME: this.fakeHome(workspaceId),
-      // Codrox identifies itself to its own hook script
+      CLAUDE_CONFIG_DIR: this.claudeDir(workspaceId),
       CODROX_WORKSPACE: workspaceId,
       CODROX_RUNTIME_DIR: this.globalRuntimeDir()
     }
@@ -190,7 +176,7 @@ class ClaudeEnvManager {
     try {
       rmSync(dir, { recursive: true, force: true })
     } catch (err) {
-      console.warn('[ClaudeEnvManager] failed to remove workspace home', dir, err)
+      console.warn('[ClaudeEnvManager] failed to remove workspace dir', dir, err)
     }
   }
 
@@ -211,7 +197,6 @@ class ClaudeEnvManager {
     }
 
     const settings = {
-      // Marker so users / debuggers can tell this is codrox-generated
       $codrox: {
         managed: true,
         workspaceId,
@@ -225,11 +210,42 @@ class ClaudeEnvManager {
   }
 
   private buildHookCommand(scriptPath: string, event: HookEvent, workspaceId: string): string {
-    // Quote the script path; export the event/workspace as env vars consumed by
-    // codrox-hook.js. Using sh -c keeps this portable across user shells.
     const script = scriptPath.replace(/'/g, "'\\''")
     const ws = workspaceId.replace(/'/g, "'\\''")
     return `CODROX_HOOK_EVENT=${event} CODROX_WORKSPACE='${ws}' node '${script}'`
+  }
+
+  private writeMcpConfig(claudeDir: string, workspacePath: string): void {
+    const spec = resolveMcpLaunchSpec(workspacePath)
+    if (!spec) return
+
+    const mcpJsonPath = join(claudeDir, '.mcp.json')
+    const desired = {
+      mcpServers: {
+        'codrox-graph': {
+          command: spec.command,
+          args: spec.args,
+          env: spec.env
+        }
+      }
+    }
+
+    let existing: { mcpServers?: Record<string, unknown> } = {}
+    if (existsSync(mcpJsonPath)) {
+      try {
+        existing = JSON.parse(readFileSync(mcpJsonPath, 'utf-8')) as typeof existing
+      } catch {
+        existing = {}
+      }
+    }
+    const merged = {
+      ...existing,
+      mcpServers: {
+        ...(existing.mcpServers ?? {}),
+        ...desired.mcpServers
+      }
+    }
+    writeFileSync(mcpJsonPath, JSON.stringify(merged, null, 2) + '\n', 'utf-8')
   }
 
   private refreshSymlink(linkPath: string, targetPath: string): void {
@@ -253,46 +269,6 @@ class ClaudeEnvManager {
       return lstatSync(p).isSymbolicLink()
     } catch {
       return false
-    }
-  }
-
-  private seedShellConfigIfMissing(home: string): void {
-    const target = join(home, '.zshrc')
-    if (existsSync(target)) return
-    const source = join(this.globalRuntimeDir(), 'shell', 'zshrc.default')
-    if (!existsSync(source)) {
-      console.warn('[ClaudeEnvManager] zshrc.default not found at', source)
-      return
-    }
-    try {
-      writeFileSync(target, readFileSync(source, 'utf-8'), 'utf-8')
-    } catch (err) {
-      console.warn('[ClaudeEnvManager] failed to seed .zshrc', target, err)
-    }
-  }
-
-  private maybeSymlinkUserFile(home: string, name: string): void {
-    const target = join(homedir(), name)
-    if (!existsSync(target)) return
-    const link = join(home, name)
-    try {
-      if (this.isLink(link) || existsSync(link)) unlinkSync(link)
-      symlinkSync(target, link, 'file')
-    } catch {
-      // ignore
-    }
-  }
-
-  private maybeSymlinkUserDir(home: string, name: string): void {
-    const target = join(homedir(), name)
-    if (!existsSync(target)) return
-    const link = join(home, name)
-    mkdirSync(dirname(link), { recursive: true })
-    try {
-      if (this.isLink(link) || existsSync(link)) unlinkSync(link)
-      symlinkSync(target, link, 'dir')
-    } catch {
-      // ignore
     }
   }
 }

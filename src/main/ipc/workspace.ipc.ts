@@ -29,13 +29,12 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     const workspace = persistenceService.saveWorkspace({ path, name: basename(path) })
     // Best-effort setup: create .claude/ dir and CLAUDE.md if missing
     workspaceSetup.setupWorkspace(path).catch(() => {})
-    // Materialize the workspace's isolated Claude environment (fake $HOME with
-    // codrox-managed skills/hooks/commands). Best-effort: failure here should
-    // not block adding a workspace.
+    // Materialize the workspace's isolated Claude config dir (skills/hooks/commands).
+    // Best-effort: failure here should not block adding a workspace.
     try {
-      claudeEnvManager.materializeWorkspaceHome(workspace.id)
+      claudeEnvManager.materializeWorkspace(workspace.id, path)
     } catch (err) {
-      console.warn('[workspace:add] materializeWorkspaceHome failed:', err)
+      console.warn('[workspace:add] materializeWorkspace failed:', err)
     }
     return workspace
   })
@@ -174,6 +173,12 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('workspace:setup', async (_event, payload: { path: string }) => {
     try {
       await workspaceSetup.setupWorkspace(payload.path)
+      // Re-materialize MCP config in the isolated config dir
+      const workspaces = persistenceService.getWorkspaces()
+      const workspace = workspaces.find((w) => w.path === payload.path)
+      if (workspace) {
+        claudeEnvManager.materializeWorkspace(workspace.id, payload.path)
+      }
       return { success: true }
     } catch {
       return { success: false }
