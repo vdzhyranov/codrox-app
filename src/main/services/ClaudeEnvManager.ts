@@ -178,7 +178,10 @@ class ClaudeEnvManager {
       CODROX_USER_HOME: homedir(),
       // Codrox identifies itself to its own hook script
       CODROX_WORKSPACE: workspaceId,
-      CODROX_RUNTIME_DIR: this.globalRuntimeDir()
+      CODROX_RUNTIME_DIR: this.globalRuntimeDir(),
+      // gh stores credentials in a file under $HOME instead of the system keychain,
+      // which is inaccessible from PTYs running inside the Electron sandbox.
+      GH_KEYRING_BACKEND: 'file'
     }
     if (this.hookListenerUrl) {
       env.CODROX_HOOK_URL = this.hookListenerUrl

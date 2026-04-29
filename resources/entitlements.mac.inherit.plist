@@ -10,6 +10,10 @@
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
+    <key>com.apple.security.keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.codrox.app</string>
+    </array>
     <key>com.apple.security.inherit</key>
     <true/>
 </dict>
