@@ -1,7 +1,7 @@
 import type { IpcMain, BrowserWindow } from 'electron'
 import { graphService } from '../services/graph/GraphService'
 import { fileWatcher } from '../services/FileWatcher'
-import type { GraphRelation } from '@shared/types/graph'
+import type { GraphNodeType, GraphRelation } from '@shared/types/graph'
 
 export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
   // Auto-reindex on filesystem changes for any already-opened workspace.
@@ -14,8 +14,12 @@ export function register(ipcMain: IpcMain, _mainWindow: BrowserWindow): void {
     return graphService.reindex(payload.workspacePath)
   })
 
-  ipcMain.handle('graph:search', (_e, payload: { workspacePath: string; q: string; limit?: number }) => {
-    return graphService.search(payload.workspacePath, payload.q, payload.limit)
+  ipcMain.handle('graph:search', (_e, payload: { workspacePath: string; q: string; limit?: number; nodeTypes?: GraphNodeType[] }) => {
+    return graphService.search(payload.workspacePath, payload.q, payload.limit, payload.nodeTypes)
+  })
+
+  ipcMain.handle('graph:sweep', (_e, payload: { workspacePath: string }) => {
+    return { deleted: graphService.sweepOrphans(payload.workspacePath) }
   })
 
   ipcMain.handle(
