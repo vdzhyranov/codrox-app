@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -15,6 +15,9 @@ interface UsePTYOptions {
 }
 
 export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef }: UsePTYOptions): void {
+  // Capture workspaceId at mount time — changing workspace must not recreate the PTY
+  const workspaceIdRef = useRef(workspaceId)
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -123,14 +126,20 @@ export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef
         return true
       })
 
-      // Create PTY in main process
-      window.api.invoke('pty:create', {
+      // Create PTY (no-op if already running — allows reconnection after pane restructure)
+      ;(window.api.invoke('pty:create', {
         id: ptyId,
         worktreeId,
-        workspaceId,
+        workspaceId: workspaceIdRef.current,
         cwd,
         type
-      })
+      }) as Promise<void>).then(() => {
+        if (cancelled) return
+        // Replay scrollback buffer so the terminal shows previous output on reconnect
+        return window.api.invoke('pty:getBuffer', { id: ptyId }) as Promise<string>
+      }).then((buffer) => {
+        if (!cancelled && buffer) term.write(buffer)
+      }).catch(() => {})
 
       // Forward user input to PTY
       term.onData((data) => {
@@ -169,7 +178,7 @@ export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef
         unsubExit()
         resizeObserver.disconnect()
         term.dispose()
-        window.api.invoke('pty:destroy', { id: ptyId })
+        // PTY stays alive in main process for reconnection — only destroyed on explicit close
       }
     }
 
@@ -182,5 +191,7 @@ export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef
       }
       cleanup?.()
     }
-  }, [ptyId, worktreeId, workspaceId, cwd, type, containerRef])
+  // workspaceId intentionally excluded — captured via ref to prevent PTY teardown on workspace switch
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ptyId, worktreeId, cwd, type, containerRef])
 }

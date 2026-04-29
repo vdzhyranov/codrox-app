@@ -52,6 +52,10 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     return ptyManager.listActive()
   })
 
+  ipcMain.handle('pty:getBuffer', (_event, payload: { id: string }) => {
+    return ptyManager.getBuffer(payload.id)
+  })
+
   ipcMain.handle('shell:openExternal', (_event, payload: { url: string }) => {
     shell.openExternal(payload.url)
   })

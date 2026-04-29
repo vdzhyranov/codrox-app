@@ -574,6 +574,11 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
     (id: string) => {
       setPaneTree((prev) => {
         if (countLeaves(prev) <= 1) return prev // keep at least one
+        const leaf = findLeafById(prev, id)
+        if (leaf) {
+          // Explicitly destroy the PTY since usePTY no longer destroys on unmount
+          window.api.invoke('pty:destroy', { id: leaf.sessionName })
+        }
         const result = removePane(prev, id)
         return result ?? prev
       })
