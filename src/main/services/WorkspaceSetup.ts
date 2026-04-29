@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, basename } from 'path'
+import { resolveMcpLaunchSpec } from './graph/mcpPath'
 
 export interface ProjectInfo {
   name: string
@@ -23,6 +24,43 @@ export class WorkspaceSetup {
       const content = this.generateClaudeMd(info)
       writeFileSync(claudeMdPath, content, 'utf-8')
     }
+
+    // Wire Claude Code → codrox-graph MCP server (per-workspace).
+    this.writeMcpConfig(workspacePath)
+  }
+
+  private writeMcpConfig(workspacePath: string): void {
+    const spec = resolveMcpLaunchSpec(workspacePath)
+    if (!spec) return // bundled script not available — skip silently in tests/dev edge cases
+
+    const mcpJsonPath = join(workspacePath, '.claude', '.mcp.json')
+    const desired = {
+      mcpServers: {
+        'codrox-graph': {
+          command: spec.command,
+          args: spec.args,
+          env: spec.env
+        }
+      }
+    }
+
+    // Merge with any existing .mcp.json so we don't clobber user-added servers.
+    let existing: { mcpServers?: Record<string, unknown> } = {}
+    if (existsSync(mcpJsonPath)) {
+      try {
+        existing = JSON.parse(readFileSync(mcpJsonPath, 'utf-8')) as typeof existing
+      } catch {
+        existing = {}
+      }
+    }
+    const merged = {
+      ...existing,
+      mcpServers: {
+        ...(existing.mcpServers ?? {}),
+        ...desired.mcpServers
+      }
+    }
+    writeFileSync(mcpJsonPath, JSON.stringify(merged, null, 2) + '\n', 'utf-8')
   }
 
   async detectProjectInfo(workspacePath: string): Promise<ProjectInfo> {

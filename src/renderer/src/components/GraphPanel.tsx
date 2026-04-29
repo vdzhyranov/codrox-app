@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useGraph } from '@renderer/hooks/useGraph'
+import { GraphHelpModal } from '@renderer/components/GraphHelpModal'
 import type { GraphNode, GraphSubgraph } from '@shared/types/graph'
 
 const TYPE_COLOR: Record<GraphNode['type'], string> = {
@@ -11,10 +12,17 @@ const TYPE_COLOR: Record<GraphNode['type'], string> = {
   concept: '#06b6d4'
 }
 
+const CLAUDE_STROKE = '#f97316' // distinguishes Claude-authored nodes/edges
+
+function isClaudeNode(node: GraphNode): boolean {
+  return (node.meta as { source?: string } | null)?.source === 'claude'
+}
+
 export function GraphPanel(): JSX.Element | null {
   const workspacePath = useActiveWorktreePath()
   const { stats, results, query, setQuery, reindex, loadNeighbors, isIndexing, isSearching } =
     useGraph(workspacePath)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   if (!workspacePath) return null
 
@@ -52,16 +60,44 @@ export function GraphPanel(): JSX.Element | null {
         >
           {isIndexing ? '…' : 'Reindex'}
         </button>
+        <button
+          onClick={() => setHelpOpen(true)}
+          title="What is the knowledge graph?"
+          style={{
+            width: 24,
+            padding: 0,
+            fontSize: 'var(--fs-xs)',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            color: 'var(--text2)',
+            borderRadius: 3,
+            cursor: 'pointer'
+          }}
+        >
+          ?
+        </button>
       </div>
 
       <div style={{ padding: '0 12px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
-        {stats
-          ? `${stats.nodeCount} nodes · ${stats.edgeCount} edges${
+        {stats ? (
+          <>
+            {`${stats.nodeCount} nodes · ${stats.edgeCount} edges${
               stats.lastIndexedAt
                 ? ` · indexed ${formatRelative(stats.lastIndexedAt)}`
                 : ' · not indexed'
-            }`
-          : '…'}
+            }`}
+            {stats.claudeNodeCount + stats.claudeEdgeCount > 0 && (
+              <>
+                {' · '}
+                <span style={{ color: CLAUDE_STROKE }} title="Authored by Claude via MCP">
+                  {stats.claudeNodeCount}n / {stats.claudeEdgeCount}e by Claude
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          '…'
+        )}
       </div>
 
       <GraphCanvas results={results} onSelect={loadNeighbors} />
@@ -71,6 +107,8 @@ export function GraphPanel(): JSX.Element | null {
           No matches.
         </div>
       )}
+
+      {helpOpen && <GraphHelpModal onClose={() => setHelpOpen(false)} stats={stats} />}
     </div>
   )
 }
@@ -102,6 +140,7 @@ function GraphCanvas({ results, onSelect }: GraphCanvasProps): JSX.Element {
           const a = nodeIndex.get(e.fromId)
           const b = nodeIndex.get(e.toId)
           if (!a || !b) return null
+          const claude = e.source === 'claude'
           return (
             <line
               key={e.id}
@@ -109,30 +148,60 @@ function GraphCanvas({ results, onSelect }: GraphCanvasProps): JSX.Element {
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke="var(--border)"
-              strokeWidth={1}
-            />
+              stroke={claude ? CLAUDE_STROKE : 'var(--border)'}
+              strokeWidth={claude ? 1.5 : 1}
+              strokeDasharray={claude ? '3 2' : undefined}
+            >
+              <title>
+                {e.relation}
+                {claude ? ' (Claude)' : ''}
+              </title>
+            </line>
           )
         })}
-        {positioned.map(({ x, y, node }) => (
-          <g
-            key={node.id}
-            transform={`translate(${x}, ${y})`}
-            onClick={() => onSelect(node.id)}
-            style={{ cursor: 'pointer' }}
-          >
-            <circle r={5} fill={TYPE_COLOR[node.type]} />
-            <text
-              x={8}
-              y={4}
-              fontSize={10}
-              fill="var(--text2)"
-              style={{ pointerEvents: 'none' }}
+        {positioned.map(({ x, y, node }) => {
+          const claude = isClaudeNode(node)
+          return (
+            <g
+              key={node.id}
+              transform={`translate(${x}, ${y})`}
+              onClick={() => onSelect(node.id)}
+              style={{ cursor: 'pointer' }}
             >
-              {truncate(node.label, 22)}
-            </text>
-          </g>
-        ))}
+              <circle
+                r={5}
+                fill={TYPE_COLOR[node.type]}
+                stroke={claude ? CLAUDE_STROKE : 'none'}
+                strokeWidth={claude ? 2 : 0}
+              />
+              {claude && (
+                <text
+                  x={-2.5}
+                  y={2.5}
+                  fontSize={6}
+                  fontWeight={700}
+                  fill="#fff"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  C
+                </text>
+              )}
+              <text
+                x={8}
+                y={4}
+                fontSize={10}
+                fill={claude ? CLAUDE_STROKE : 'var(--text2)'}
+                style={{ pointerEvents: 'none' }}
+              >
+                {truncate(node.label, 22)}
+              </text>
+              <title>
+                {node.id}
+                {claude ? ' — authored by Claude' : ''}
+              </title>
+            </g>
+          )
+        })}
       </svg>
     </div>
   )
