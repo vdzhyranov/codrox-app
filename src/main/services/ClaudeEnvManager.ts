@@ -145,7 +145,8 @@ class ClaudeEnvManager {
       )
     }
 
-    // Symlink common HOME-coupled tools so git / ssh / gh keep working unchanged.
+    // Symlink git/ssh config so the claude process (which runs with HOME=<fake>)
+    // can still resolve user identity and SSH keys.
     this.maybeSymlinkUserFile(home, '.gitconfig')
     this.maybeSymlinkUserDir(home, '.ssh')
     this.maybeSymlinkUserDir(home, '.config/git')
@@ -167,21 +168,14 @@ class ClaudeEnvManager {
    * shell that may launch Claude) inside a workspace.
    */
   getEnvForWorkspace(workspaceId: string): Record<string, string> {
-    const home = this.fakeHome(workspaceId)
     const env: Record<string, string> = {
-      HOME: home,
-      // Some tools also read these:
-      USERPROFILE: home,
-      // Real $HOME is exposed as CODROX_USER_HOME so the workspace's .zshrc
-      // can find user-installed tooling (oh-my-zsh, nvm, pyenv, …) without
-      // breaking the ~/.claude isolation that lives under the fake $HOME.
-      CODROX_USER_HOME: homedir(),
+      // Expose the fake home path so PTYs can set HOME only for the claude
+      // process rather than for the entire shell session. Tools like gh, git,
+      // npm etc. continue to see the real $HOME and need no special treatment.
+      CODROX_WORKSPACE_HOME: this.fakeHome(workspaceId),
       // Codrox identifies itself to its own hook script
       CODROX_WORKSPACE: workspaceId,
-      CODROX_RUNTIME_DIR: this.globalRuntimeDir(),
-      // gh stores credentials in a file under $HOME instead of the system keychain,
-      // which is inaccessible from PTYs running inside the Electron sandbox.
-      GH_KEYRING_BACKEND: 'file'
+      CODROX_RUNTIME_DIR: this.globalRuntimeDir()
     }
     if (this.hookListenerUrl) {
       env.CODROX_HOOK_URL = this.hookListenerUrl

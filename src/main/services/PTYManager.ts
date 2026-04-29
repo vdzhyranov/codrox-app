@@ -111,7 +111,10 @@ class PTYManager {
       if (options.type === 'claude') {
         setTimeout(() => {
           if (this.sessions.has(id)) {
-            ptyProcess.write('claude --continue 2>/dev/null || claude\n')
+            // HOME is scoped only to the claude process so that shell tools
+            // (gh, git, npm…) keep using the real user home while ~/.claude
+            // stays isolated per workspace.
+            ptyProcess.write('HOME="$CODROX_WORKSPACE_HOME" claude --continue 2>/dev/null || HOME="$CODROX_WORKSPACE_HOME" claude\n')
           }
         }, 500)
       }
