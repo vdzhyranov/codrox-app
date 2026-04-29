@@ -45,7 +45,7 @@ export class FileIndexer {
       id: fileId(rel),
       type: 'file',
       label: rel.split(sep).pop() ?? rel,
-      meta: { path: rel, size: stat.size, language: langFromExt(extname(absPath)) },
+      meta: { path: rel, size: stat.size, mtime: stat.mtimeMs, language: langFromExt(extname(absPath)) },
       updatedAt: Date.now()
     }
 

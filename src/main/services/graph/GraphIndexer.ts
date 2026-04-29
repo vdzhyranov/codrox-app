@@ -1,3 +1,4 @@
+import { statSync } from 'fs'
 import { GraphStore } from './GraphStore'
 import { FileIndexer } from './indexers/FileIndexer'
 import { GitIndexer } from './indexers/GitIndexer'
@@ -35,7 +36,22 @@ export class GraphIndexer {
       ? new FileIndexer(scanPath)
       : this.fileIndexer
 
+    let fileCount = 0
     for (const abs of scanner.walk()) {
+      // Yield every 50 files so the main-process event loop stays responsive.
+      if (++fileCount % 50 === 0) await new Promise<void>((r) => setImmediate(r))
+
+      // Skip files whose mtime hasn't changed since the last index run.
+      const nodeId = scanner.idForAbs(abs)
+      if (nodeId) {
+        const existing = this.store.getNode(nodeId)
+        if (existing && typeof existing.meta.mtime === 'number') {
+          let diskMtime: number | undefined
+          try { diskMtime = statSync(abs).mtimeMs } catch { continue }
+          if (diskMtime === existing.meta.mtime) continue
+        }
+      }
+
       const result = scanner.indexFile(abs)
       if (!result) continue
       this.store.upsertNode(result.fileNode)

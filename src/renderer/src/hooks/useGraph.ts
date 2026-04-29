@@ -54,6 +54,7 @@ export function useGraph(workspacePath: string | null, worktreePath?: string | n
   }, [workspacePath])
 
   // Auto-reindex when the active worktree changes (different branch = different files).
+  // Deferred by 150 ms so the UI finishes rendering before the indexer starts.
   useEffect(() => {
     if (!workspacePath) return
     const scanPath = worktreePath ?? workspacePath
@@ -62,20 +63,24 @@ export function useGraph(workspacePath: string | null, worktreePath?: string | n
     lastIndexedKey.current = key
 
     let cancelled = false
-    setIsIndexing(true)
-    ipc
-      .invoke('graph:reindex', { workspacePath, scanPath })
-      .then((s) => {
-        if (!cancelled) setStats(s)
-      })
-      .catch((err) => {
-        if (!cancelled) console.error('graph:reindex failed', err)
-      })
-      .finally(() => {
-        if (!cancelled) setIsIndexing(false)
-      })
+    const timer = setTimeout(() => {
+      if (cancelled) return
+      setIsIndexing(true)
+      ipc
+        .invoke('graph:reindex', { workspacePath, scanPath })
+        .then((s) => {
+          if (!cancelled) setStats(s)
+        })
+        .catch((err) => {
+          if (!cancelled) console.error('graph:reindex failed', err)
+        })
+        .finally(() => {
+          if (!cancelled) setIsIndexing(false)
+        })
+    }, 150)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [workspacePath, worktreePath])
 
