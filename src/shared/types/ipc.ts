@@ -4,6 +4,7 @@ import type { GitFileStatus } from './git'
 import type { LinearUser, LinearTeam, LinearTask, LinearAuthState, CreateTaskInput, WorktreeLinearLink } from './linear'
 import type { AppSettings } from './settings'
 import type { GraphNodeType, GraphRelation, GraphStats, GraphSubgraph } from './graph'
+import type { TokenUsageRecord, TokenSummary } from './tokens'
 
 // Request-response channel definitions
 export interface IpcChannels {
@@ -202,6 +203,14 @@ export interface IpcChannels {
   'graph:sweep': {
     request: { workspacePath: string }
     response: { deleted: number }
+  }
+  'tokens:getHistory': {
+    request: { workspacePath: string }
+    response: TokenUsageRecord[]
+  }
+  'tokens:getSummary': {
+    request: { workspacePath: string }
+    response: TokenSummary
   }
 }
 

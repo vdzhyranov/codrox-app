@@ -450,14 +450,14 @@ function WorktreeNode({
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: 'var(--green, #4ade80)',
+            background: 'var(--green, #3fb950)',
             flexShrink: 0,
-            boxShadow: '0 0 4px var(--green, #4ade80)',
+            boxShadow: '0 0 4px var(--green, #3fb950)',
           }}
         />
       )}
       {/* external worktree badge */}
-      {worktree.isExternal && (
+      {worktree.isExternal && !worktree.isMain && (
         <span
           title="Created outside Codrox"
           style={{
