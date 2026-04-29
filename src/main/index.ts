@@ -1,4 +1,4 @@
-process.env.PATH = `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin`;
+process.env.PATH = `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin:${process.env.HOME}/.local/bin`;
 
 import { app, shell, BrowserWindow, Menu } from "electron";
 import { join } from "path";
