@@ -54,7 +54,9 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci --include=optional || (rm -rf node_modules package-lock.json && npm install --include=optional)
+        run: |
+          rm -f package-lock.json
+          npm install --include=optional
 
       - name: Build
         run: npm run ${{ matrix.build_cmd }}
