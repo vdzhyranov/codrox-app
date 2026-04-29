@@ -3,7 +3,7 @@ import type { FileTreeNode, FileChangeEvent } from './filesystem'
 import type { GitFileStatus } from './git'
 import type { LinearUser, LinearTeam, LinearTask, LinearAuthState, CreateTaskInput, WorktreeLinearLink } from './linear'
 import type { AppSettings } from './settings'
-import type { GraphRelation, GraphStats, GraphSubgraph } from './graph'
+import type { GraphNodeType, GraphRelation, GraphStats, GraphSubgraph } from './graph'
 
 // Request-response channel definitions
 export interface IpcChannels {
@@ -132,6 +132,13 @@ export interface IpcChannels {
     request: {
       id: string
       worktreeId: string
+      /**
+       * Workspace this PTY belongs to. When supplied, ClaudeEnvManager
+       * provides an isolated $HOME (per-workspace Claude config, auth, history).
+       * Should always be set for `claude` PTYs; recommended for terminals so
+       * `claude` typed at a shell prompt picks up the right profile.
+       */
+      workspaceId?: string
       cwd: string
       shell?: string
       args?: string[]
@@ -168,7 +175,7 @@ export interface IpcChannels {
     response: GraphStats
   }
   'graph:search': {
-    request: { workspacePath: string; q: string; limit?: number }
+    request: { workspacePath: string; q: string; limit?: number; nodeTypes?: GraphNodeType[] }
     response: GraphSubgraph
   }
   'graph:neighbors': {
@@ -183,6 +190,10 @@ export interface IpcChannels {
   'graph:stats': {
     request: { workspacePath: string }
     response: GraphStats
+  }
+  'graph:sweep': {
+    request: { workspacePath: string }
+    response: { deleted: number }
   }
 }
 

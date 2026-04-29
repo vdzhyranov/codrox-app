@@ -1,7 +1,14 @@
 import Database from 'better-sqlite3'
 import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import type { GraphEdge, GraphNode, GraphRelation, GraphSource, GraphStats } from '@shared/types/graph'
+import type {
+  GraphEdge,
+  GraphNode,
+  GraphNodeType,
+  GraphRelation,
+  GraphSource,
+  GraphStats
+} from '@shared/types/graph'
 
 /**
  * Bumped when the on-disk schema or meta-stamping conventions change in a way
@@ -213,7 +220,7 @@ export class GraphStore {
     return rowToNode(row)
   }
 
-  searchNodes(query: string, limit = 30): GraphNode[] {
+  searchNodes(query: string, limit = 30, nodeTypes?: GraphNodeType[]): GraphNode[] {
     if (!query.trim()) return []
     // FTS5: wrap each token in double quotes so operators (-, @, =, *, etc.)
     // are treated as literals; double internal quotes per FTS5 escape rules.
@@ -222,15 +229,22 @@ export class GraphStore {
       .filter(Boolean)
       .map((t) => `"${t.replace(/"/g, '""')}"*`)
       .join(' ')
+
+    const hasTypeFilter = nodeTypes && nodeTypes.length > 0
+    const typeWhere = hasTypeFilter
+      ? `AND n.type IN (${nodeTypes!.map(() => '?').join(',')})`
+      : ''
+    const params: unknown[] = [ftsQuery, ...(hasTypeFilter ? nodeTypes! : []), limit]
+
     const rows = this.db
       .prepare(
         `SELECT n.id, n.type, n.label, n.meta, n.updated_at
          FROM nodes_fts f JOIN nodes n ON n.rowid = f.rowid
-         WHERE nodes_fts MATCH ?
+         WHERE nodes_fts MATCH ? ${typeWhere}
          ORDER BY rank
          LIMIT ?`
       )
-      .all(ftsQuery, limit) as Array<{
+      .all(...params) as Array<{
       id: string
       type: string
       label: string
@@ -238,6 +252,47 @@ export class GraphStore {
       updated_at: number
     }>
     return rows.map(rowToNode)
+  }
+
+  /**
+   * Delete orphan nodes: nodes with no edges (in or out) whose `path` meta field
+   * points to a file that no longer exists on disk.
+   * Returns the number of nodes deleted.
+   */
+  sweepOrphans(): number {
+    const orphans = this.db
+      .prepare(
+        `SELECT id, meta FROM nodes
+         WHERE id NOT IN (SELECT from_id FROM edges)
+           AND id NOT IN (SELECT to_id   FROM edges)`
+      )
+      .all() as Array<{ id: string; meta: string | null }>
+
+    const toDelete: string[] = []
+    for (const row of orphans) {
+      let path: string | undefined
+      if (row.meta) {
+        try {
+          const m = JSON.parse(row.meta) as Record<string, unknown>
+          if (typeof m['path'] === 'string') path = m['path']
+        } catch {
+          // ignore parse errors
+        }
+      }
+      // Only sweep nodes that have a path AND that path is gone from disk.
+      if (path && !existsSync(path)) {
+        toDelete.push(row.id)
+      }
+    }
+
+    if (toDelete.length === 0) return 0
+
+    const tx = this.db.transaction(() => {
+      const placeholders = toDelete.map(() => '?').join(',')
+      this.db.prepare(`DELETE FROM nodes WHERE id IN (${placeholders})`).run(...toDelete)
+    })
+    tx()
+    return toDelete.length
   }
 
   neighbors(
@@ -262,7 +317,7 @@ export class GraphStore {
     }
     const edgeRows = this.db
       .prepare(
-        `SELECT id, from_id, to_id, relation, weight FROM edges WHERE ${where}`
+        `SELECT id, from_id, to_id, relation, weight, source FROM edges WHERE ${where}`
       )
       .all(...params) as Array<{
       id: string
@@ -270,13 +325,15 @@ export class GraphStore {
       to_id: string
       relation: string
       weight: number
+      source: string
     }>
     const edges: GraphEdge[] = edgeRows.map((e) => ({
       id: e.id,
       fromId: e.from_id,
       toId: e.to_id,
       relation: e.relation as GraphRelation,
-      weight: e.weight
+      weight: e.weight,
+      source: e.source as GraphSource
     }))
     const ids = new Set<string>()
     for (const e of edges) {

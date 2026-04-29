@@ -64,7 +64,14 @@
       "gatekeeperAssess": false,
       "entitlements": "resources/entitlements.mac.plist",
       "entitlementsInherit": "resources/entitlements.mac.inherit.plist"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/claude-runtime",
+        "to": "claude-runtime",
+        "filter": ["**/*"]
+      }
+    ]
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
