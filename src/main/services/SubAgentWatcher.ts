@@ -91,7 +91,7 @@ class SubAgentWatcher {
     this.knownAgents.clear()
   }
 
-  listAgents(workspacePath: string): AgentListEntry[] {
+  listAgents(workspacePath: string, maxAgeMs = 60 * 60 * 1000): AgentListEntry[] {
     const projectKey = workspacePath.replace(/\//g, '-')
     const baseDir = `/private/tmp/claude-501/${projectKey}`
     const agents: AgentListEntry[] = []
@@ -109,7 +109,6 @@ class SubAgentWatcher {
     }
 
     const now = Date.now()
-    const ONE_HOUR = 60 * 60 * 1000
 
     for (const sessionDir of sessionDirs) {
       const tasksDir = join(sessionDir, 'tasks')
@@ -130,8 +129,7 @@ class SubAgentWatcher {
         try {
           const stat = statSync(filePath)
           const age = now - stat.mtimeMs
-          // Only show agents from the last hour
-          if (age > ONE_HOUR) continue
+          if (age > maxAgeMs) continue
 
           const task = this.extractTask(filePath)
           // If file was modified in the last 30 seconds, consider it running

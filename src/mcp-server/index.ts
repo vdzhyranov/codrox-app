@@ -20,7 +20,7 @@ import { z } from 'zod'
  * Bumped together; mismatch means the bundled MCP and the live app disagree
  * about the on-disk shape, so we refuse to attach rather than corrupt the graph.
  */
-const EXPECTED_SCHEMA_VERSION = 2
+const EXPECTED_SCHEMA_VERSION = 3
 
 interface NodeRow {
   id: string
