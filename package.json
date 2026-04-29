@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
@@ -49,8 +49,11 @@
       "node_modules/zod-to-json-schema/**",
       "node_modules/ajv/**",
       "node_modules/ajv-formats/**",
+      "node_modules/bindings/**",
       "node_modules/fast-deep-equal/**",
       "node_modules/fast-json-stable-stringify/**",
+      "node_modules/fast-uri/**",
+      "node_modules/file-uri-to-path/**",
       "node_modules/json-schema-traverse/**",
       "node_modules/uri-js/**"
     ],
