@@ -215,11 +215,12 @@ class ClaudeEnvManager {
     return `CODROX_HOOK_EVENT=${event} CODROX_WORKSPACE='${ws}' node '${script}'`
   }
 
-  private writeMcpConfig(claudeDir: string, workspacePath: string): void {
+  private writeMcpConfig(_claudeDir: string, workspacePath: string): void {
     const spec = resolveMcpLaunchSpec(workspacePath)
     if (!spec) return
 
-    const mcpJsonPath = join(claudeDir, '.mcp.json')
+    // Claude Code reads .mcp.json from the project directory, not CLAUDE_CONFIG_DIR.
+    const mcpJsonPath = join(workspacePath, '.mcp.json')
     const desired = {
       mcpServers: {
         'codrox-graph': {

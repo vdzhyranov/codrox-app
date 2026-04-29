@@ -1,6 +1,6 @@
 {
   "name": "codrox",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Codrox — AI-native development environment",
   "main": "./out/main/index.js",
   "author": "dzhyranov",
@@ -45,7 +45,8 @@
     "asarUnpack": [
       "out/main/mcp-server.js",
       "node_modules/@modelcontextprotocol/**",
-      "node_modules/zod/**"
+      "node_modules/zod/**",
+      "node_modules/zod-to-json-schema/**"
     ],
     "files": [
       "!**/.{idea,git,cache,output,temp}/**",

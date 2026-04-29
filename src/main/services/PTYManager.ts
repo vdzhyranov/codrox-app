@@ -62,6 +62,8 @@ class PTYManager {
 
     // If we know which workspace this PTY belongs to, materialize the
     // workspace's fake $HOME and inject the Claude-isolation env vars.
+    // workspacePath is resolved here so writeMcpConfig writes to the right
+    // project directory on every PTY spawn, keeping the entry current.
     let workspaceEnv: Record<string, string> = {}
     if (options.workspaceId) {
       try {

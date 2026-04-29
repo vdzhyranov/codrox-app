@@ -15,3 +15,4 @@ coverage/
 .codrox/
 .forge/
 *.tsbuildinfo
+.mcp.json
