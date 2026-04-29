@@ -19,6 +19,8 @@ interface PTYSession {
 
 class PTYManager {
   private sessions: Map<string, PTYSession> = new Map()
+  private outputBuffers: Map<string, string[]> = new Map()
+  private readonly MAX_BUFFER_BYTES = 128 * 1024
   private onDataCallback: ((id: string, data: string) => void) | null = null
   private onExitCallback: ((id: string, exitCode: number) => void) | null = null
   private onFirstPromptCallback:
@@ -46,7 +48,8 @@ class PTYManager {
     }
   ): void {
     if (this.sessions.has(id)) {
-      this.destroy(id)
+      // PTY already running — caller will reattach, don't destroy
+      return
     }
 
     const defaultShell = process.env.SHELL || '/bin/zsh'
@@ -98,9 +101,20 @@ class PTYManager {
         lastOutputAt: Date.now()
       }
 
+      this.outputBuffers.set(id, [])
+
       ptyProcess.onData((data) => {
         session.lastOutputAt = Date.now()
         this.onDataCallback?.(id, data)
+        const buf = this.outputBuffers.get(id)
+        if (buf !== undefined) {
+          buf.push(data)
+          let size = buf.reduce((acc, s) => acc + s.length, 0)
+          while (size > this.MAX_BUFFER_BYTES && buf.length > 1) {
+            size -= buf[0].length
+            buf.shift()
+          }
+        }
       })
 
       ptyProcess.onExit(({ exitCode }) => {
@@ -145,7 +159,12 @@ class PTYManager {
     if (session) {
       session.pty.kill()
       this.sessions.delete(id)
+      this.outputBuffers.delete(id)
     }
+  }
+
+  getBuffer(id: string): string {
+    return (this.outputBuffers.get(id) ?? []).join('')
   }
 
   destroyByWorktree(worktreeId: string): void {
