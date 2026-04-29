@@ -150,6 +150,11 @@ class ClaudeEnvManager {
     this.maybeSymlinkUserDir(home, '.ssh')
     this.maybeSymlinkUserDir(home, '.config/git')
 
+    // Seed a default .zshrc the first time we materialize the home so terminal
+    // PTYs get a sensible interactive shell. We never overwrite — once created,
+    // users own it.
+    this.seedShellConfigIfMissing(home)
+
     // Generate settings.json (merged: codrox-managed entries + workspace overrides).
     this.writeSettings(workspaceId, claudeDir)
 
@@ -166,6 +171,10 @@ class ClaudeEnvManager {
       HOME: home,
       // Some tools also read these:
       USERPROFILE: home,
+      // Real $HOME is exposed as CODROX_USER_HOME so the workspace's .zshrc
+      // can find user-installed tooling (oh-my-zsh, nvm, pyenv, …) without
+      // breaking the ~/.claude isolation that lives under the fake $HOME.
+      CODROX_USER_HOME: homedir(),
       // Codrox identifies itself to its own hook script
       CODROX_WORKSPACE: workspaceId,
       CODROX_RUNTIME_DIR: this.globalRuntimeDir()
@@ -246,6 +255,21 @@ class ClaudeEnvManager {
       return lstatSync(p).isSymbolicLink()
     } catch {
       return false
+    }
+  }
+
+  private seedShellConfigIfMissing(home: string): void {
+    const target = join(home, '.zshrc')
+    if (existsSync(target)) return
+    const source = join(this.globalRuntimeDir(), 'shell', 'zshrc.default')
+    if (!existsSync(source)) {
+      console.warn('[ClaudeEnvManager] zshrc.default not found at', source)
+      return
+    }
+    try {
+      writeFileSync(target, readFileSync(source, 'utf-8'), 'utf-8')
+    } catch (err) {
+      console.warn('[ClaudeEnvManager] failed to seed .zshrc', target, err)
     }
   }
 

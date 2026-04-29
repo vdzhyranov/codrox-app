@@ -50,7 +50,11 @@ class PTYManager {
 
     const defaultShell = process.env.SHELL || '/bin/zsh'
     const shell = options.shell || defaultShell
-    const args = options.args || []
+    // Spawn as a login + interactive shell so the user's zsh/bash config
+    // (PATH additions, nvm, aliases, prompt, claude on PATH) is sourced.
+    // Without -il we'd get a bare environment that can't find user-installed CLIs.
+    const isLoginCapable = /\/(zsh|bash)$/.test(shell)
+    const args = options.args || (isLoginCapable ? ['-il'] : [])
 
     // If we know which workspace this PTY belongs to, materialize the
     // workspace's fake $HOME and inject the Claude-isolation env vars.

@@ -1,0 +1,61 @@
+# Codrox-managed default zsh config
+#
+# Created once per workspace. Edit freely — Codrox will NOT overwrite this file.
+# To restore the default: delete this file; Codrox regenerates it on next launch.
+#
+# Tooling installed under your real home (oh-my-zsh, nvm, pyenv, …) is reached
+# via $CODROX_USER_HOME, which Codrox injects into the PTY env. $HOME itself
+# points at the workspace's isolated home so ~/.claude stays per-workspace.
+
+: ${CODROX_USER_HOME:=$HOME}
+
+# ---- oh-my-zsh ----
+if [ -d "$CODROX_USER_HOME/.oh-my-zsh" ]; then
+  export ZSH="$CODROX_USER_HOME/.oh-my-zsh"
+  ZSH_THEME="robbyrussell"
+  plugins=(
+    alias-finder
+    history-substring-search
+    aws
+    sudo
+    vscode
+    git-auto-fetch
+    yarn
+    npm
+    git
+    brew
+    encode64
+    docker
+    zsh-autosuggestions
+    zsh-syntax-highlighting
+    z
+  )
+  source "$ZSH/oh-my-zsh.sh"
+fi
+
+# ---- node / nvm ----
+export NVM_DIR="$CODROX_USER_HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+
+# ---- python / pyenv ----
+export PYENV_ROOT="$CODROX_USER_HOME/.pyenv"
+[ -d "$PYENV_ROOT/bin" ] && export PATH="$PYENV_ROOT/bin:$PATH"
+if command -v pyenv >/dev/null 2>&1; then
+  eval "$(pyenv init --path)"
+  eval "$(pyenv init -)"
+fi
+
+# ---- homebrew ----
+if [ -x /opt/homebrew/bin/brew ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [ -x /usr/local/bin/brew ]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
+
+# ---- local bins ----
+[ -d "$CODROX_USER_HOME/.local/bin" ] && export PATH="$CODROX_USER_HOME/.local/bin:$PATH"
+
+# ---- user customizations ----
+# Add aliases, secrets, project-specific PATH, etc. below.
+# Tip: keep API keys in a chmod 600 file like ~/.zsh_secrets and source it here.
