@@ -145,10 +145,11 @@ class ClaudeEnvManager {
       )
     }
 
-    // Symlink common HOME-coupled tools so git / ssh keep working unchanged.
+    // Symlink common HOME-coupled tools so git / ssh / gh keep working unchanged.
     this.maybeSymlinkUserFile(home, '.gitconfig')
     this.maybeSymlinkUserDir(home, '.ssh')
     this.maybeSymlinkUserDir(home, '.config/git')
+    this.maybeSymlinkUserDir(home, '.config/gh')
 
     // Seed a default .zshrc the first time we materialize the home so terminal
     // PTYs get a sensible interactive shell. We never overwrite — once created,
