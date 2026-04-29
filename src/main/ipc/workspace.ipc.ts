@@ -6,6 +6,8 @@ import { persistenceService } from '../services/PersistenceService'
 import { workspaceSetup } from '../services/WorkspaceSetup'
 import { worktreeWatcher } from '../services/WorktreeWatcher'
 import { claudeEnvManager } from '../services/ClaudeEnvManager'
+import { addManagedPath, getManagedPaths, removeManagedPath } from '../services/WorktreeRegistry'
+import { subAgentWatcher } from '../services/SubAgentWatcher'
 import type { Worktree, SessionData } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -101,6 +103,15 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
         cwd: workspacePath
       })
+      // Register this path as Codrox-managed so it can be distinguished from external worktrees
+      try {
+        const { stdout } = await execFileAsync('git', ['rev-parse', '--git-common-dir'], { cwd: workspacePath })
+        const raw = stdout.trim()
+        const gitCommonDir = raw.startsWith('/') ? raw : join(workspacePath, raw)
+        addManagedPath(gitCommonDir, worktreePath)
+      } catch {
+        // best-effort
+      }
       // Use path as ID — consistent with worktree:list
       const worktree: Worktree = {
         id: worktreePath,
@@ -108,7 +119,9 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
         path: worktreePath,
         branch,
         name,
-        isMain: false
+        isMain: false,
+        isExternal: false,
+        hasActiveSession: false,
       }
       return worktree
     }
@@ -122,6 +135,20 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], {
         cwd: workspacePath
       })
+
+      // Load registry of Codrox-managed paths
+      let managedPaths = new Set<string>()
+      try {
+        const { stdout: commonDirOut } = await execFileAsync(
+          'git', ['rev-parse', '--git-common-dir'], { cwd: workspacePath }
+        )
+        const raw = commonDirOut.trim()
+        const gitCommonDir = raw.startsWith('/') ? raw : join(workspacePath, raw)
+        managedPaths = getManagedPaths(gitCommonDir)
+      } catch {
+        // best-effort
+      }
+
       const worktrees: Worktree[] = []
       const blocks = stdout.trim().split('\n\n')
       for (const block of blocks) {
@@ -135,13 +162,17 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
           ? branchLine.replace('branch refs/heads/', '').trim()
           : '(detached)'
         const isMain = path === workspacePath
+        // Main worktree is always internal; linked worktrees are external if not in registry
+        const isExternal = !isMain && !managedPaths.has(path)
         worktrees.push({
-          id: path, // use path as stable id
+          id: path,
           workspaceId,
           path,
           branch,
           name: isMain ? basename(workspacePath) : basename(path),
-          isMain
+          isMain,
+          isExternal,
+          hasActiveSession: subAgentWatcher.hasActiveSession(path),
         })
       }
       return worktrees
@@ -156,16 +187,24 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
       try {
         await execFileAsync('git', ['worktree', 'remove', '--force', payload.worktreePath], opts)
         await execFileAsync('git', ['worktree', 'prune'], opts).catch(() => {})
-        return { success: true }
       } catch {
         try {
           await execFileAsync('git', ['worktree', 'remove', '--force', '--force', payload.worktreePath], opts)
           await execFileAsync('git', ['worktree', 'prune'], opts).catch(() => {})
-          return { success: true }
         } catch {
           return { success: false }
         }
       }
+      // Unregister from Codrox registry
+      try {
+        const { stdout } = await execFileAsync('git', ['rev-parse', '--git-common-dir'], { cwd: payload.workspacePath })
+        const raw = stdout.trim()
+        const gitCommonDir = raw.startsWith('/') ? raw : join(payload.workspacePath, raw)
+        removeManagedPath(gitCommonDir, payload.worktreePath)
+      } catch {
+        // best-effort
+      }
+      return { success: true }
     }
   )
 

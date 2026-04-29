@@ -156,6 +156,26 @@ class SubAgentWatcher {
     return agents
   }
 
+  hasActiveSession(worktreePath: string): boolean {
+    const projectKey = worktreePath.replace(/\//g, '-')
+    const baseDir = `/private/tmp/claude-501/${projectKey}`
+    const sessionDir = this.findMostRecentSessionDir(baseDir)
+    if (!sessionDir) return false
+    const tasksDir = join(sessionDir, 'tasks')
+    if (!existsSync(tasksDir)) return false
+    const now = Date.now()
+    try {
+      for (const entry of readdirSync(tasksDir)) {
+        if (!entry.endsWith('.output')) continue
+        const stat = statSync(join(tasksDir, entry))
+        if (now - stat.mtimeMs < 30000 && stat.size > 0) return true
+      }
+    } catch {
+      // ignore
+    }
+    return false
+  }
+
   private findMostRecentSessionDir(baseDir: string): string | null {
     if (!existsSync(baseDir)) return null
 
