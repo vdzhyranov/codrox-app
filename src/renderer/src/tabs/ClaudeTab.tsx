@@ -1,7 +1,8 @@
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { useActiveWorkspaceId } from '@renderer/hooks/useActiveWorkspaceId'
-import { useRef } from 'react'
+import { useRef, useCallback } from 'react'
 import { usePTY } from '@renderer/hooks/usePTY'
+import { usePTYFileDrop } from '@renderer/hooks/usePTYFileDrop'
 import type { ClaudeTab as ClaudeTabType } from '@shared/types'
 
 export function ClaudeTab({ tab }: { tab: ClaudeTabType }): JSX.Element {
@@ -18,5 +19,19 @@ export function ClaudeTab({ tab }: { tab: ClaudeTabType }): JSX.Element {
     containerRef
   })
 
-  return <div ref={containerRef} className="h-full w-full bg-zinc-900" />
+  const formatPath = useCallback((p: string) => `@${p}`, [])
+  const { isDragging } = usePTYFileDrop({ containerRef, ptyId: tab.ptyId, formatPath })
+
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full bg-zinc-900" />
+      {isDragging && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-900/70">
+          <div className="rounded-lg border border-dashed border-blue-400 px-8 py-6 text-blue-300 text-sm">
+            Drop files to insert as @references
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
