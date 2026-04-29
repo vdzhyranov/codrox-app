@@ -5,6 +5,7 @@ import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import { registerAllHandlers } from "./ipc";
 import { persistenceService } from "./services/PersistenceService";
+import { claudeEnvManager } from "./services/ClaudeEnvManager";
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -57,6 +58,14 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId("com.codrox.app");
+
+  // Refresh the bundled Claude runtime cache (skills, agents, commands, hooks)
+  // before any workspace materializes its fake $HOME.
+  try {
+    claudeEnvManager.bumpRuntimeIfStale();
+  } catch (err) {
+    console.warn("[main] bumpRuntimeIfStale failed:", err);
+  }
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);

@@ -132,6 +132,13 @@ export interface IpcChannels {
     request: {
       id: string
       worktreeId: string
+      /**
+       * Workspace this PTY belongs to. When supplied, ClaudeEnvManager
+       * provides an isolated $HOME (per-workspace Claude config, auth, history).
+       * Should always be set for `claude` PTYs; recommended for terminals so
+       * `claude` typed at a shell prompt picks up the right profile.
+       */
+      workspaceId?: string
       cwd: string
       shell?: string
       args?: string[]
