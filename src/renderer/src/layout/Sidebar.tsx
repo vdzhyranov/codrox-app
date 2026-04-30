@@ -1185,8 +1185,29 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
 
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   const [backHovered, setBackHovered] = useState(false)
+  const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
+  const [remoteBranches, setRemoteBranches] = useState<string[]>([])
+  const [showBranchSelector, setShowBranchSelector] = useState(false)
 
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
+
+  // Load default branch preference and remote branches on workspace change
+  useEffect(() => {
+    if (!workspace) return
+    window.api.invoke('workspace:getDefaultBranch', { workspaceId: workspace.id })
+      .then((branch) => setDefaultBranch((branch as string | null) ?? null))
+      .catch(() => {})
+    window.api.invoke('workspace:listRemoteBranches', { workspacePath: workspace.path })
+      .then((branches) => setRemoteBranches(branches as string[]))
+      .catch(() => {})
+  }, [workspace?.id, workspace?.path])
+
+  const handleSetDefaultBranch = async (branch: string): Promise<void> => {
+    if (!workspace) return
+    setDefaultBranch(branch || null)
+    setShowBranchSelector(false)
+    await window.api.invoke('workspace:setDefaultBranch', { workspaceId: workspace.id, branch }).catch(() => {})
+  }
 
   // Subscribe to git-metadata changes so branch renames and external worktree
   // mutations are reflected immediately without a manual refresh.
@@ -1229,7 +1250,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
     if (!workspace) return
     const name = generateRandomName()
     try {
-      await createWorktree(workspace.id, workspace.path, name, name)
+      await createWorktree(workspace.id, workspace.path, name, name, defaultBranch ?? undefined)
     } catch {
       // ignore
     }
@@ -1239,7 +1260,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
     if (!workspace) return
     setShowNewWorktree(false)
     try {
-      await createWorktree(workspace.id, workspace.path, branch, branch)
+      await createWorktree(workspace.id, workspace.path, branch, branch, defaultBranch ?? undefined)
     } catch {
       // ignore
     }
@@ -1266,7 +1287,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         branch = result.branchName
       }
       const name = `${taskData.identifier}: ${taskData.title}`.slice(0, 60)
-      const wt = await createWorktree(workspace.id, workspace.path, branch, name)
+      const wt = await createWorktree(workspace.id, workspace.path, branch, name, defaultBranch ?? undefined)
       await linkWorktree(wt.path, taskData.id, taskData.identifier)
     } catch {
       // If branch exists, the user can create it manually
@@ -1379,6 +1400,79 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
           >
             +
           </button>
+        </div>
+
+        {/* Default base branch selector */}
+        <div style={{ position: 'relative', padding: '0 14px 4px' }}>
+          <button
+            onClick={() => setShowBranchSelector((v) => !v)}
+            title="Set default base branch for new worktrees"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              padding: 0,
+              color: 'var(--text3)',
+            }}
+          >
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>base:</span>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--accent2)', fontFamily: 'var(--mono)' }}>
+              {defaultBranch || 'auto'}
+            </span>
+            <span style={{ fontSize: 9, color: 'var(--text3)', lineHeight: 1 }}>▾</span>
+          </button>
+          {showBranchSelector && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 14,
+                zIndex: 100,
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                minWidth: 140,
+                maxHeight: 200,
+                overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              }}
+            >
+              <div
+                onClick={() => handleSetDefaultBranch('')}
+                style={{
+                  padding: '5px 10px',
+                  fontSize: 'var(--fs-sm)',
+                  color: !defaultBranch ? 'var(--accent2)' : 'var(--text2)',
+                  cursor: 'pointer',
+                  fontStyle: 'italic',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface3)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+              >
+                auto (origin/HEAD)
+              </div>
+              {remoteBranches.map((b) => (
+                <div
+                  key={b}
+                  onClick={() => handleSetDefaultBranch(b)}
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: 'var(--fs-sm)',
+                    fontFamily: 'var(--mono)',
+                    color: defaultBranch === b ? 'var(--accent2)' : 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface3)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  {b}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {sorted.map((wt) => {

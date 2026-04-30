@@ -97,21 +97,53 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     'worktree:create',
     async (
       _event,
-      payload: { workspaceId: string; workspacePath: string; branch: string; name: string }
+      payload: { workspaceId: string; workspacePath: string; branch: string; name: string; baseBranch?: string }
     ) => {
-      const { workspaceId, workspacePath, branch, name } = payload
+      const { workspaceId, workspacePath, branch, name, baseBranch } = payload
       const worktreePath = join(workspacePath, '..', `${basename(workspacePath)}-${branch}`)
-      await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
-        cwd: workspacePath
-      })
+      const opts = { cwd: workspacePath }
+
+      // Fetch latest from origin so the new branch starts from up-to-date state
+      await execFileAsync('git', ['fetch', 'origin'], opts).catch(() => {})
+
+      // Determine start point: explicit baseBranch > origin/HEAD > local HEAD
+      let startPoint: string | null = null
+      if (baseBranch) {
+        startPoint = `origin/${baseBranch}`
+      } else {
+        try {
+          const { stdout } = await execFileAsync(
+            'git',
+            ['symbolic-ref', 'refs/remotes/origin/HEAD'],
+            opts
+          )
+          // stdout is e.g. "refs/remotes/origin/main\n" → strip prefix
+          startPoint = stdout.trim().replace('refs/remotes/', '')
+        } catch {
+          // origin/HEAD not set; fall through to null
+        }
+      }
+
+      const addArgs = startPoint
+        ? ['worktree', 'add', '-b', branch, worktreePath, startPoint]
+        : ['worktree', 'add', '-b', branch, worktreePath]
+      await execFileAsync('git', addArgs, opts)
+
       // Register this path as Codrox-managed so it can be distinguished from external worktrees
       try {
-        const { stdout } = await execFileAsync('git', ['rev-parse', '--git-common-dir'], { cwd: workspacePath })
-        const raw = stdout.trim()
+        const { stdout: commonDirOut } = await execFileAsync('git', ['rev-parse', '--git-common-dir'], opts)
+        const raw = commonDirOut.trim()
         const gitCommonDir = raw.startsWith('/') ? raw : join(workspacePath, raw)
         addManagedPath(gitCommonDir, worktreePath)
       } catch {
         // best-effort
+      }
+
+      // Write MCP config into the new worktree so codrox-graph is available there
+      try {
+        claudeEnvManager.writeMcpConfig('', worktreePath)
+      } catch (err) {
+        console.warn('[worktree:create] writeMcpConfig failed:', err)
       }
       // Use path as ID — consistent with worktree:list
       const worktree: Worktree = {
@@ -258,4 +290,38 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('session:load', () => {
     return persistenceService.loadSession()
   })
+
+  // Default branch preference per workspace
+  ipcMain.handle('workspace:getDefaultBranch', (_event, payload: { workspaceId: string }) => {
+    return persistenceService.getAppState<string>(`workspace:defaultBranch:${payload.workspaceId}`)
+  })
+
+  ipcMain.handle(
+    'workspace:setDefaultBranch',
+    (_event, payload: { workspaceId: string; branch: string }) => {
+      persistenceService.setAppState(
+        `workspace:defaultBranch:${payload.workspaceId}`,
+        payload.branch || null
+      )
+      return { success: true }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace:listRemoteBranches',
+    async (_event, payload: { workspacePath: string }) => {
+      try {
+        const { stdout } = await execFileAsync('git', ['branch', '-r'], {
+          cwd: payload.workspacePath
+        })
+        return stdout
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && !l.includes('->'))
+          .map((l) => l.replace(/^origin\//, ''))
+      } catch {
+        return []
+      }
+    }
+  )
 }

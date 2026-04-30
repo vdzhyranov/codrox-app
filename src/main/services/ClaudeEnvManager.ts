@@ -215,7 +215,7 @@ class ClaudeEnvManager {
     return `CODROX_HOOK_EVENT=${event} CODROX_WORKSPACE='${ws}' node '${script}'`
   }
 
-  private writeMcpConfig(_claudeDir: string, workspacePath: string): void {
+  writeMcpConfig(_claudeDir: string, workspacePath: string): void {
     const spec = resolveMcpLaunchSpec(workspacePath)
     if (!spec) return
 
