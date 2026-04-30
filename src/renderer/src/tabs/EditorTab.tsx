@@ -10,7 +10,8 @@ import { rust } from '@codemirror/lang-rust'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { marked } from 'marked'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { EditorTab as EditorTabType } from '@shared/types'
 
 function isMarkdownFile(filePath: string): boolean {
@@ -205,9 +206,6 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
     )
   }
 
-  const parsedHtml = isMd && mode === 'preview'
-    ? (marked.parse(content) as string)
-    : ''
 
   return (
     <div
@@ -302,10 +300,9 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
       />
 
       {isMd && mode === 'preview' && !loading && (
-        <div
-          className="md-preview"
-          dangerouslySetInnerHTML={{ __html: parsedHtml }}
-        />
+        <div className="md-preview">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        </div>
       )}
     </div>
   )

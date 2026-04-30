@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
 import { EditorView, basicSetup } from 'codemirror'
@@ -13,224 +15,30 @@ import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 
-// ── Simple Markdown Renderer ──────────────────────────────────────────────────
-
-function formatInline(text: string): (string | JSX.Element)[] {
-  const parts: (string | JSX.Element)[] = []
-  const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)]+)\))/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-  let key = 0
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
-    }
-
-    if (match[1]) {
-      parts.push(<strong key={key++}>{match[2]}</strong>)
-    } else if (match[3]) {
-      parts.push(<em key={key++}>{match[4]}</em>)
-    } else if (match[5]) {
-      parts.push(
-        <code
-          key={key++}
-          style={{
-            background: 'var(--surface2)',
-            padding: '1px 4px',
-            borderRadius: 3,
-            fontSize: '0.9em',
-          }}
-        >
-          {match[6]}
-        </code>,
-      )
-    } else if (match[7]) {
-      parts.push(
-        <span key={key++} style={{ color: 'var(--accent2)' }}>
-          {match[8]}
-        </span>,
-      )
-    }
-
-    lastIndex = match.index + match[0].length
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
-  }
-
-  return parts.length > 0 ? parts : [text]
-}
-
-function MarkdownView({ content }: { content: string }): JSX.Element {
-  const lines = content.split('\n')
-  const elements: JSX.Element[] = []
-  let inCodeBlock = false
-  let codeLines: string[] = []
-  let key = 0
-
-  for (const line of lines) {
-    if (line.startsWith('```')) {
-      if (inCodeBlock) {
-        elements.push(
-          <pre
-            key={key++}
-            style={{
-              background: 'var(--surface2)',
-              padding: '8px 12px',
-              borderRadius: 4,
-              overflow: 'auto',
-              fontSize: 11,
-              margin: '4px 0',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <code>{codeLines.join('\n')}</code>
-          </pre>,
-        )
-        codeLines = []
-        inCodeBlock = false
-      } else {
-        inCodeBlock = true
-      }
-      continue
-    }
-
-    if (inCodeBlock) {
-      codeLines.push(line)
-      continue
-    }
-
-    if (line.startsWith('### ')) {
-      elements.push(
-        <h3
-          key={key++}
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            margin: '12px 0 4px',
-            color: 'var(--text)',
-          }}
-        >
-          {formatInline(line.slice(4))}
-        </h3>,
-      )
-    } else if (line.startsWith('## ')) {
-      elements.push(
-        <h2
-          key={key++}
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            margin: '14px 0 4px',
-            color: 'var(--text)',
-          }}
-        >
-          {formatInline(line.slice(3))}
-        </h2>,
-      )
-    } else if (line.startsWith('# ')) {
-      elements.push(
-        <h1
-          key={key++}
-          style={{
-            fontSize: 16,
-            fontWeight: 800,
-            margin: '16px 0 6px',
-            color: 'var(--text)',
-          }}
-        >
-          {formatInline(line.slice(2))}
-        </h1>,
-      )
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      elements.push(
-        <div key={key++} style={{ display: 'flex', gap: 6, paddingLeft: 8 }}>
-          <span style={{ color: 'var(--text3)', flexShrink: 0 }}>•</span>
-          <span>{formatInline(line.slice(2))}</span>
-        </div>,
-      )
-    } else if (/^\d+\.\s/.test(line)) {
-      const match = line.match(/^(\d+)\.\s(.*)$/)
-      if (match) {
-        elements.push(
-          <div key={key++} style={{ display: 'flex', gap: 6, paddingLeft: 8 }}>
-            <span style={{ color: 'var(--text3)', flexShrink: 0 }}>
-              {match[1]}.
-            </span>
-            <span>{formatInline(match[2])}</span>
-          </div>,
-        )
-      }
-    } else if (line.startsWith('> ')) {
-      elements.push(
-        <div
-          key={key++}
-          style={{
-            borderLeft: '3px solid var(--accent)',
-            paddingLeft: 10,
-            color: 'var(--text2)',
-            margin: '4px 0',
-          }}
-        >
-          {formatInline(line.slice(2))}
-        </div>,
-      )
-    } else if (line.trim() === '') {
-      elements.push(<div key={key++} style={{ height: 8 }} />)
-    } else if (line.startsWith('---') || line.startsWith('***')) {
-      elements.push(
-        <hr
-          key={key++}
-          style={{
-            border: 'none',
-            borderTop: '1px solid var(--border)',
-            margin: '8px 0',
-          }}
-        />,
-      )
-    } else {
-      elements.push(
-        <p key={key++} style={{ margin: '2px 0' }}>
-          {formatInline(line)}
-        </p>,
-      )
-    }
-  }
-
-  // Flush remaining code block
-  if (inCodeBlock && codeLines.length > 0) {
-    elements.push(
-      <pre
-        key={key++}
-        style={{
-          background: 'var(--surface2)',
-          padding: '8px 12px',
-          borderRadius: 4,
-          overflow: 'auto',
-          fontSize: 11,
-          border: '1px solid var(--border)',
-        }}
-      >
-        <code>{codeLines.join('\n')}</code>
-      </pre>,
-    )
-  }
-
-  return (
-    <div
-      style={{
-        fontSize: 12,
-        color: 'var(--text)',
-        lineHeight: 1.6,
-        fontFamily: 'var(--mono)',
-      }}
-    >
-      {elements}
-    </div>
-  )
-}
+const fileViewerMdStyles = `
+  .md-file-view { font-size: 12px; color: var(--text); line-height: 1.6; font-family: var(--sans); }
+  .md-file-view h1 { font-size: 16px; font-weight: 800; margin: 16px 0 6px; color: var(--text); }
+  .md-file-view h2 { font-size: 14px; font-weight: 700; margin: 14px 0 4px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 2px; }
+  .md-file-view h3 { font-size: 13px; font-weight: 700; margin: 12px 0 4px; color: var(--text); }
+  .md-file-view h4, .md-file-view h5, .md-file-view h6 { font-size: 12px; font-weight: 700; margin: 10px 0 4px; color: var(--text); }
+  .md-file-view p { margin: 4px 0; }
+  .md-file-view a { color: var(--accent2); text-decoration: none; }
+  .md-file-view a:hover { text-decoration: underline; }
+  .md-file-view code { font-family: var(--mono); font-size: 0.88em; background: var(--surface2); padding: 1px 4px; border-radius: 3px; color: var(--accent2); }
+  .md-file-view pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; overflow-x: auto; margin: 4px 0; font-size: 11px; }
+  .md-file-view pre code { background: none; padding: 0; color: var(--text); font-size: inherit; }
+  .md-file-view blockquote { border-left: 3px solid var(--accent); padding-left: 10px; color: var(--text2); margin: 4px 0; }
+  .md-file-view blockquote p { margin: 0; }
+  .md-file-view ul, .md-file-view ol { padding-left: 18px; margin: 4px 0; }
+  .md-file-view li { margin: 2px 0; }
+  .md-file-view table { border-collapse: collapse; width: 100%; margin: 6px 0; font-size: 11px; }
+  .md-file-view th, .md-file-view td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+  .md-file-view th { background: var(--surface2); font-weight: 600; color: var(--text); }
+  .md-file-view tr:nth-child(even) td { background: var(--surface2); }
+  .md-file-view hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .md-file-view img { max-width: 100%; border-radius: 4px; }
+  .md-file-view input[type="checkbox"] { margin-right: 4px; }
+`
 
 // ── FileViewer ────────────────────────────────────────────────────────────────
 
@@ -654,9 +462,18 @@ export function FileViewer(): JSX.Element {
         )}
         {!loading && !error && viewMode === 'content' && content !== null && (
           isMarkdown && !mdRaw ? (
+<<<<<<< HEAD
+            <>
+              <style>{fileViewerMdStyles}</style>
+              <div className="md-file-view">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              </div>
+            </>
+=======
             <div style={{ padding: '8px 12px', height: '100%', overflow: 'auto', boxSizing: 'border-box' }}>
               <MarkdownView content={content} />
             </div>
+>>>>>>> main
           ) : (
             <CodeEditor
               key={filePath}
