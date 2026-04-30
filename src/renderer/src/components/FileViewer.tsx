@@ -1,8 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { useActiveWorktreePath } from '@renderer/hooks/useActiveWorktreePath'
+import { EditorView, basicSetup } from 'codemirror'
+import { EditorState } from '@codemirror/state'
+import { javascript } from '@codemirror/lang-javascript'
+import { python } from '@codemirror/lang-python'
+import { json } from '@codemirror/lang-json'
+import { html } from '@codemirror/lang-html'
+import { css } from '@codemirror/lang-css'
+import { rust } from '@codemirror/lang-rust'
+import { markdown } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
+import { oneDark } from '@codemirror/theme-one-dark'
 
 const fileViewerMdStyles = `
   .md-file-view { font-size: 12px; color: var(--text); line-height: 1.6; font-family: var(--sans); }
@@ -164,6 +175,71 @@ function DiffView({ diff }: { diff: string }): JSX.Element {
   )
 }
 
+// ── CodeEditor ────────────────────────────────────────────────────────────────
+
+function getLanguageExtension(filePath: string) {
+  const ext = filePath.split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'js': case 'jsx': return javascript({ jsx: true })
+    case 'ts': case 'tsx': return javascript({ jsx: true, typescript: true })
+    case 'py': return python()
+    case 'json': return json()
+    case 'html': return html()
+    case 'css': return css()
+    case 'rs': return rust()
+    case 'md': case 'markdown': case 'mdx': return markdown({ codeLanguages: languages })
+    default: return []
+  }
+}
+
+function CodeEditor({
+  content,
+  filePath,
+  onChangeRef,
+  onModified,
+}: {
+  content: string
+  filePath: string
+  onChangeRef: React.MutableRefObject<string>
+  onModified: () => void
+}): JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const lang = getLanguageExtension(filePath)
+    const state = EditorState.create({
+      doc: content,
+      extensions: [
+        basicSetup,
+        oneDark,
+        lang,
+        EditorView.theme({
+          '&': { height: '100%', fontSize: '12px' },
+          '.cm-editor': { height: '100%' },
+          '.cm-scroller': {
+            overflow: 'auto',
+            fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
+          },
+        }),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            onChangeRef.current = update.state.doc.toString()
+            onModified()
+          }
+        }),
+      ],
+    })
+
+    const view = new EditorView({ state, parent: container })
+    return () => view.destroy()
+  }, [filePath, content])
+
+  return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />
+}
+
 // ── FileViewer ────────────────────────────────────────────────────────────────
 
 type ViewMode = 'content' | 'diff'
@@ -178,17 +254,33 @@ export function FileViewer(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [mdRaw, setMdRaw] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('content')
+  const [modified, setModified] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const editorContentRef = useRef<string>('')
+
+  const save = useCallback(async () => {
+    if (!filePath || !modified) return
+    setSaving(true)
+    try {
+      await window.api.invoke('fs:writeFile', { path: filePath, content: editorContentRef.current })
+      setModified(false)
+    } finally {
+      setSaving(false)
+    }
+  }, [filePath, modified])
 
   useEffect(() => {
     if (!filePath) {
       setContent(null)
       setDiff(null)
       setError(null)
+      setModified(false)
       return
     }
 
     setLoading(true)
     setError(null)
+    setModified(false)
 
     // Load file content
     const loadContent = window.api
@@ -196,6 +288,7 @@ export function FileViewer(): JSX.Element {
       .then((result) => {
         const r = result as { content: string }
         setContent(r.content)
+        editorContentRef.current = r.content
       })
       .catch(() => setContent(null))
 
@@ -247,6 +340,12 @@ export function FileViewer(): JSX.Element {
         overflow: 'hidden',
         minHeight: 0,
       }}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+          e.preventDefault()
+          save()
+        }
+      }}
     >
       {/* File name bar */}
       <div
@@ -271,8 +370,33 @@ export function FileViewer(): JSX.Element {
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {fileName}
         </span>
+        {modified && (
+          <span style={{ color: 'var(--accent2)', fontSize: 9, flexShrink: 0 }}>●</span>
+        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexShrink: 0 }}>
+          {/* Save button */}
+          {modified && (
+            <button
+              onClick={save}
+              disabled={saving}
+              style={{
+                fontSize: 8,
+                padding: '1px 6px',
+                borderRadius: 2,
+                background: 'var(--accent-dim)',
+                color: 'var(--accent2)',
+                border: '1px solid var(--accent)',
+                cursor: saving ? 'default' : 'pointer',
+                fontFamily: 'var(--mono)',
+                fontWeight: 600,
+                opacity: saving ? 0.6 : 1,
+                transition: 'all .1s',
+              }}
+            >
+              {saving ? 'SAVING...' : 'SAVE'}
+            </button>
+          )}
           {/* Diff toggle */}
           {hasDiff && (
             <button
@@ -320,8 +444,8 @@ export function FileViewer(): JSX.Element {
       <div
         style={{
           flex: 1,
-          overflow: 'auto',
-          padding: viewMode === 'diff' ? 0 : '8px 12px',
+          overflow: 'hidden',
+          padding: 0,
           minHeight: 0,
         }}
       >
@@ -338,26 +462,26 @@ export function FileViewer(): JSX.Element {
         )}
         {!loading && !error && viewMode === 'content' && content !== null && (
           isMarkdown && !mdRaw ? (
+<<<<<<< HEAD
             <>
               <style>{fileViewerMdStyles}</style>
               <div className="md-file-view">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
               </div>
             </>
+=======
+            <div style={{ padding: '8px 12px', height: '100%', overflow: 'auto', boxSizing: 'border-box' }}>
+              <MarkdownView content={content} />
+            </div>
+>>>>>>> main
           ) : (
-            <pre
-              style={{
-                fontSize: 11,
-                color: 'var(--text)',
-                fontFamily: 'var(--mono)',
-                lineHeight: 1.5,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-                margin: 0,
-              }}
-            >
-              {content}
-            </pre>
+            <CodeEditor
+              key={filePath}
+              content={content}
+              filePath={filePath}
+              onChangeRef={editorContentRef}
+              onModified={() => setModified(true)}
+            />
           )
         )}
       </div>

@@ -172,6 +172,7 @@ interface AgentEntry {
 
 export function RightPanel(): JSX.Element {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeWorktreePath = useActiveWorktreePath()
 
   const [tab, setTab] = useState<RightPanelTab>('agents')
@@ -257,10 +258,10 @@ export function RightPanel(): JSX.Element {
 
   const loadUsageLimits = useCallback(async () => {
     try {
-      const limits = (await window.api.invoke('claude:usageLimits', undefined)) as UsageLimits | null
+      const limits = (await window.api.invoke('claude:usageLimits', { workspaceId: activeWorkspaceId })) as UsageLimits | null
       setUsageLimits(limits)
     } catch { /* no data */ }
-  }, [])
+  }, [activeWorkspaceId])
 
   useEffect(() => {
     loadBranch()
@@ -287,6 +288,11 @@ export function RightPanel(): JSX.Element {
       clearInterval(limitsInterval)
     }
   }, [loadBranch, loadTokens, loadAgents, loadGitCount, loadToolCount, loadUsageLimits])
+
+  // Clear stale limits immediately when switching workspaces
+  useEffect(() => {
+    setUsageLimits(null)
+  }, [activeWorkspaceId])
 
   // Real usage limits from Anthropic API (via ClaudeUsageService)
   const limit5hPct = usageLimits?.fiveHourPercent ?? null
