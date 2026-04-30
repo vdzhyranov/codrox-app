@@ -34,6 +34,10 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     })
   })
 
+  ipcMain.handle('agents:toolCount', (_event, payload: { workspacePath: string }) => {
+    return subAgentWatcher.countToolCalls(payload.workspacePath)
+  })
+
   ipcMain.handle('subagents:unwatch', () => {
     subAgentWatcher.stop()
   })

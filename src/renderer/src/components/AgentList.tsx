@@ -48,7 +48,6 @@ function formatAge(ms: number): string {
 export function AgentList(): JSX.Element {
   const activeWorktreePath = useActiveWorktreePath()
   const [agents, setAgents] = useState<AgentEntry[]>([])
-  const [showAll, setShowAll] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!activeWorktreePath) { setAgents([]); return }
@@ -81,10 +80,6 @@ export function AgentList(): JSX.Element {
     }
   }
 
-  const running = agents.filter((a) => a.status === 'running')
-  const completed = agents.filter((a) => a.status === 'completed')
-  const visible = showAll ? agents : running
-
   if (agents.length === 0) {
     return (
       <div style={{ padding: '6px 12px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
@@ -93,58 +88,21 @@ export function AgentList(): JSX.Element {
     )
   }
 
+  // Running first, then completed — all visible, no toggle
+  const running = agents.filter((a) => a.status === 'running')
+  const completed = agents.filter((a) => a.status === 'completed')
+
   return (
-    <div style={{ padding: '4px 8px 4px' }}>
-      {/* Running agents — always shown, highlighted */}
+    <div style={{ padding: '4px 8px' }}>
       {running.map((a) => (
         <AgentItem key={a.id} agent={a} onOpen={() => handleOpen(a)} />
       ))}
-
-      {/* Completed agents — only when showAll */}
-      {showAll && completed.map((a) => (
+      {running.length > 0 && completed.length > 0 && (
+        <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+      )}
+      {completed.map((a) => (
         <AgentItem key={a.id} agent={a} onOpen={() => handleOpen(a)} />
       ))}
-
-      {/* Show all / hide toggle with count */}
-      {completed.length > 0 && (
-        <div
-          onClick={() => setShowAll((s) => !s)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '4px 6px 2px',
-            cursor: 'pointer',
-            fontSize: 'var(--fs-xs)',
-            color: 'var(--text3)',
-            transition: 'color .1s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-        >
-          <span>{showAll ? '▾ Hide' : '▸ Show all'}</span>
-          <span
-            style={{
-              fontSize: 'var(--fs-xs)',
-              padding: '0 4px',
-              borderRadius: 3,
-              background: 'var(--surface3)',
-              border: '1px solid var(--border)',
-              fontWeight: 600,
-              fontFamily: 'var(--mono)',
-            }}
-          >
-            {agents.length}
-          </span>
-        </div>
-      )}
-
-      {/* Running count indicator when collapsed */}
-      {!showAll && running.length === 0 && completed.length > 0 && (
-        <div style={{ padding: '2px 6px', fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>
-          No active agents
-        </div>
-      )}
     </div>
   )
 }
@@ -174,7 +132,6 @@ function AgentItem({ agent, onOpen }: { agent: AgentEntry; onOpen: () => void })
         marginBottom: 2,
       }}
     >
-      {/* Status dot */}
       <div
         style={{
           width: 5,
@@ -186,7 +143,6 @@ function AgentItem({ agent, onOpen }: { agent: AgentEntry; onOpen: () => void })
         }}
         className={isRunning ? 'pulse' : undefined}
       />
-      {/* Task snippet */}
       <span
         style={{
           fontSize: 'var(--fs-sm)',
@@ -200,7 +156,6 @@ function AgentItem({ agent, onOpen }: { agent: AgentEntry; onOpen: () => void })
       >
         {agent.task || agent.id.slice(0, 8)}
       </span>
-      {/* Age */}
       <span style={{ fontSize: 'var(--fs-xs)', color: isRunning ? color : 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0 }}>
         {formatAge(agent.startedAt)}
       </span>

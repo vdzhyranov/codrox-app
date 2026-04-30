@@ -154,6 +154,29 @@ class SubAgentWatcher {
     return agents
   }
 
+  countToolCalls(workspacePath: string, maxAgeMs = 60 * 60 * 1000): number {
+    const agents = this.listAgents(workspacePath, maxAgeMs)
+    let total = 0
+    for (const agent of agents) {
+      try {
+        const text = readFileSync(agent.outputPath, 'utf-8')
+        for (const line of text.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          try {
+            const parsed = JSON.parse(trimmed) as { type?: string; message?: { content?: unknown[] } }
+            if (parsed.type !== 'assistant') continue
+            if (!Array.isArray(parsed.message?.content)) continue
+            for (const block of parsed.message!.content) {
+              if ((block as { type?: string }).type === 'tool_use') total++
+            }
+          } catch { /* skip */ }
+        }
+      } catch { /* skip */ }
+    }
+    return total
+  }
+
   hasActiveSession(worktreePath: string): boolean {
     const projectKey = worktreePath.replace(/\//g, '-')
     const baseDir = `/private/tmp/claude-501/${projectKey}`

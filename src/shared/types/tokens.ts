@@ -23,3 +23,11 @@ export interface TokenSummary {
     cacheReadTokens: number
   }>
 }
+
+export interface UsageLimits {
+  fiveHourPercent: number | null
+  weeklyPercent: number | null
+  fiveHourResetsAt: string | null
+  weeklyResetsAt: string | null
+  stale?: boolean
+}
