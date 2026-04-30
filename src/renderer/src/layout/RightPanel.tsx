@@ -5,9 +5,10 @@ import { FileTree } from '@renderer/components/FileTree'
 import { GitChanges } from '@renderer/components/GitChanges'
 import { AgentList } from '@renderer/components/AgentList'
 import { BrowserTabs } from '@renderer/components/BrowserTabs'
+import { GraphPanel } from '@renderer/components/GraphPanel'
 import type { TokenSummary, TokenUsageRecord, UsageLimits } from '@shared/types/tokens'
 
-type RightPanelTab = 'agents' | 'files' | 'git' | 'browser'
+type RightPanelTab = 'agents' | 'files' | 'git' | 'graph' | 'browser'
 
 // Footer row heights
 const ROW_H = 18
@@ -72,6 +73,18 @@ function GlobeIcon(): JSX.Element {
       <circle cx="12" cy="12" r="10" />
       <line x1="2" y1="12" x2="22" y2="12" />
       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  )
+}
+
+function GraphIcon(): JSX.Element {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5" cy="12" r="2.5" />
+      <circle cx="19" cy="5" r="2.5" />
+      <circle cx="19" cy="19" r="2.5" />
+      <line x1="7.3" y1="11" x2="16.7" y2="6.5" />
+      <line x1="7.3" y1="13" x2="16.7" y2="17.5" />
     </svg>
   )
 }
@@ -341,6 +354,7 @@ export function RightPanel(): JSX.Element {
         <TabBtn label="AGENTS" active={tab === 'agents'} onClick={() => setTab('agents')} />
         <TabBtn label="FILES" active={tab === 'files'} onClick={() => setTab('files')} />
         <TabBtn label="GIT" badge={gitFileCount} active={tab === 'git'} onClick={() => setTab('git')} />
+        <TabBtn label="GRAPH" icon={<GraphIcon />} active={tab === 'graph'} onClick={() => setTab('graph')} />
         <div style={{ flex: 1 }} />
         <TabBtn label="Browser" icon={<GlobeIcon />} active={tab === 'browser'} onClick={() => setTab('browser')} />
       </div>
@@ -366,6 +380,10 @@ export function RightPanel(): JSX.Element {
         ) : tab === 'git' ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
             <GitChanges />
+          </div>
+        ) : tab === 'graph' ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+            <GraphPanel />
           </div>
         ) : null}
       </div>
