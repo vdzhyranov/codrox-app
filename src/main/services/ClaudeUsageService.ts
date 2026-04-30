@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execFileSync } from 'child_process'
+import { createHash } from 'crypto'
 import https from 'https'
 import type { UsageLimits } from '@shared/types/tokens'
 
@@ -15,8 +16,9 @@ function omcCachePath(): string {
   return join(homedir(), '.claude', 'plugins', 'oh-my-claudecode', '.usage-cache.json')
 }
 
-function codroxCachePath(): string {
-  return join(homedir(), '.claude', 'codrox-usage-cache.json')
+function codroxCachePath(workspaceId?: string): string {
+  const suffix = workspaceId ? `-${workspaceId}` : ''
+  return join(homedir(), '.claude', `codrox-usage-cache${suffix}.json`)
 }
 
 function readCacheFile(path: string, allowStale = false): UsageLimits | null {
@@ -39,9 +41,9 @@ function readCacheFile(path: string, allowStale = false): UsageLimits | null {
   }
 }
 
-function writeCacheFile(data: UsageLimits): void {
+function writeCacheFile(data: UsageLimits, workspaceId?: string): void {
   try {
-    writeFileSync(codroxCachePath(), JSON.stringify({
+    writeFileSync(codroxCachePath(workspaceId), JSON.stringify({
       timestamp: Date.now(),
       lastSuccessAt: Date.now(),
       data,
@@ -51,28 +53,54 @@ function writeCacheFile(data: UsageLimits): void {
   } catch { /* ignore write failures */ }
 }
 
-function getAccessToken(): string | null {
-  // macOS Keychain (primary)
+// Claude Code stores per-workspace creds in the Keychain under
+// "Claude Code-credentials-{sha256(CLAUDE_CONFIG_DIR).slice(0,8)}"
+function keychainSuffix(claudeDir: string): string {
+  return createHash('sha256').update(claudeDir).digest('hex').slice(0, 8)
+}
+
+function readKeychainCred(service: string): string | null {
+  try {
+    const result = execFileSync('/usr/bin/security', ['find-generic-password', '-s', service, '-w'], {
+      encoding: 'utf-8',
+      timeout: 2000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+    if (!result) return null
+    const parsed = JSON.parse(result)
+    const creds = parsed.claudeAiOauth ?? parsed
+    if (creds.accessToken && (!creds.expiresAt || creds.expiresAt > Date.now())) {
+      return creds.accessToken as string
+    }
+  } catch { /* not found or invalid */ }
+  return null
+}
+
+function getAccessToken(workspaceClaudeDir?: string): string | null {
   if (process.platform === 'darwin') {
-    for (const account of [undefined as string | undefined]) {
-      try {
-        const args: string[] = ['find-generic-password', '-s', 'Claude Code-credentials', '-w']
-        if (account) args.push('-a', account)
-        const result = execFileSync('/usr/bin/security', args, {
-          encoding: 'utf-8',
-          timeout: 2000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        }).trim()
-        if (!result) continue
-        const parsed = JSON.parse(result)
+    // Try workspace-specific Keychain entry first (different account per workspace)
+    if (workspaceClaudeDir) {
+      const token = readKeychainCred(`Claude Code-credentials-${keychainSuffix(workspaceClaudeDir)}`)
+      if (token) return token
+    }
+    // Fall back to global Keychain entry (workspace using default account)
+    const globalToken = readKeychainCred('Claude Code-credentials')
+    if (globalToken) return globalToken
+  }
+  // Non-macOS or Keychain unavailable: try workspace-specific .credentials.json
+  if (workspaceClaudeDir) {
+    try {
+      const credPath = join(workspaceClaudeDir, '.credentials.json')
+      if (existsSync(credPath)) {
+        const parsed = JSON.parse(readFileSync(credPath, 'utf-8'))
         const creds = parsed.claudeAiOauth ?? parsed
         if (creds.accessToken && (!creds.expiresAt || creds.expiresAt > Date.now())) {
           return creds.accessToken as string
         }
-      } catch { /* try next */ }
-    }
+      }
+    } catch { /* fall through */ }
   }
-  // File fallback
+  // Global file fallback
   try {
     const credPath = join(homedir(), '.claude', '.credentials.json')
     if (!existsSync(credPath)) return null
@@ -124,36 +152,42 @@ function fetchFromAnthropicApi(accessToken: string): Promise<UsageLimits | null>
 }
 
 class ClaudeUsageService {
-  private inflight: Promise<UsageLimits | null> | null = null
+  private inflight = new Map<string, Promise<UsageLimits | null>>()
 
-  async getLimits(): Promise<UsageLimits | null> {
-    // 1. omc plugin cache (written by oh-my-claudecode if installed)
-    const omcFresh = readCacheFile(omcCachePath())
-    if (omcFresh) return omcFresh
+  async getLimits(workspaceId?: string, workspaceClaudeDir?: string): Promise<UsageLimits | null> {
+    const cacheKey = workspaceId ?? '__global__'
+    const hasWorkspaceDir = !!workspaceClaudeDir
 
-    // 2. codrox own cache (fresh)
-    const codroxFresh = readCacheFile(codroxCachePath())
+    // 1. omc plugin cache — only for global (shared) account; skip if workspace has its own creds
+    if (!hasWorkspaceDir) {
+      const omcFresh = readCacheFile(omcCachePath())
+      if (omcFresh) return omcFresh
+    }
+
+    // 2. codrox own cache (per-workspace when workspaceId is present)
+    const codroxFresh = readCacheFile(codroxCachePath(workspaceId))
     if (codroxFresh) return codroxFresh
 
-    // 3. Fetch fresh from Anthropic API (deduplicated)
-    if (this.inflight) return this.inflight
+    // 3. Fetch fresh from Anthropic API (deduplicated per workspace)
+    const existing = this.inflight.get(cacheKey)
+    if (existing) return existing
 
-    this.inflight = (async () => {
+    const promise = (async () => {
       try {
-        const token = getAccessToken()
+        const token = getAccessToken(workspaceClaudeDir)
         if (!token) {
-          // Return stale codrox cache as fallback if token missing
-          return readCacheFile(codroxCachePath(), true)
+          return readCacheFile(codroxCachePath(workspaceId), true)
         }
         const result = await fetchFromAnthropicApi(token)
-        if (result) writeCacheFile(result)
-        return result ?? readCacheFile(codroxCachePath(), true)
+        if (result) writeCacheFile(result, workspaceId)
+        return result ?? readCacheFile(codroxCachePath(workspaceId), true)
       } finally {
-        this.inflight = null
+        this.inflight.delete(cacheKey)
       }
     })()
 
-    return this.inflight
+    this.inflight.set(cacheKey, promise)
+    return promise
   }
 }
 
