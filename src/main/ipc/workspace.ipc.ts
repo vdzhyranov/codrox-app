@@ -8,7 +8,8 @@ import { worktreeWatcher } from '../services/WorktreeWatcher'
 import { claudeEnvManager } from '../services/ClaudeEnvManager'
 import { addManagedPath, getManagedPaths, removeManagedPath } from '../services/WorktreeRegistry'
 import { subAgentWatcher } from '../services/SubAgentWatcher'
-import type { Worktree, SessionData } from '@shared/types'
+import type { Worktree, SessionData, WorkspaceSettings } from '@shared/types'
+import { DEFAULT_WORKSPACE_SETTINGS } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -291,21 +292,42 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     return persistenceService.loadSession()
   })
 
-  // Default branch preference per workspace
+  // Default branch preference — reads/writes through WorkspaceSettings (single source of truth)
   ipcMain.handle('workspace:getDefaultBranch', (_event, payload: { workspaceId: string }) => {
+    const settings = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${payload.workspaceId}`)
+    if (settings?.git?.mainBranch !== undefined) return settings.git.mainBranch
+    // Migrate from legacy key
     return persistenceService.getAppState<string>(`workspace:defaultBranch:${payload.workspaceId}`)
   })
 
   ipcMain.handle(
     'workspace:setDefaultBranch',
     (_event, payload: { workspaceId: string; branch: string }) => {
-      persistenceService.setAppState(
-        `workspace:defaultBranch:${payload.workspaceId}`,
-        payload.branch || null
-      )
+      const existing = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${payload.workspaceId}`)
+      const updated: WorkspaceSettings = {
+        ...DEFAULT_WORKSPACE_SETTINGS,
+        ...existing,
+        git: { mainBranch: payload.branch || null }
+      }
+      persistenceService.setAppState(`workspace:settings:${payload.workspaceId}`, updated)
       return { success: true }
     }
   )
+
+  ipcMain.handle('workspace:getSettings', (_event, payload: { workspaceId: string }) => {
+    const settings = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${payload.workspaceId}`)
+    if (settings) {
+      return { ...DEFAULT_WORKSPACE_SETTINGS, ...settings, git: { ...DEFAULT_WORKSPACE_SETTINGS.git, ...settings.git }, claude: { ...DEFAULT_WORKSPACE_SETTINGS.claude, ...settings.claude }, integrations: { ...DEFAULT_WORKSPACE_SETTINGS.integrations, ...settings.integrations } }
+    }
+    // Migrate legacy defaultBranch to new settings structure
+    const legacyBranch = persistenceService.getAppState<string>(`workspace:defaultBranch:${payload.workspaceId}`)
+    return { ...DEFAULT_WORKSPACE_SETTINGS, git: { mainBranch: legacyBranch ?? null } }
+  })
+
+  ipcMain.handle('workspace:saveSettings', (_event, payload: { workspaceId: string; settings: WorkspaceSettings }) => {
+    persistenceService.setAppState(`workspace:settings:${payload.workspaceId}`, payload.settings)
+    return { success: true }
+  })
 
   ipcMain.handle(
     'workspace:listRemoteBranches',

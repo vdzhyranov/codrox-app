@@ -3,8 +3,10 @@ import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useSidebarStore } from '@renderer/store/sidebarStore'
 import { useLinearStore } from '@renderer/store/linearStore'
 import { useSettingsStore } from '@renderer/store/settingsStore'
+import { useWorkspaceSettingsStore } from '@renderer/store/workspaceSettingsStore'
 import { CreateTaskModal } from '@renderer/components/CreateTaskModal'
 import { LinearSetupModal } from '@renderer/components/LinearSetupModal'
+import { WorkspaceSettingsModal } from '@renderer/components/WorkspaceSettingsModal'
 import type { Workspace, Worktree, LinearTask } from '@shared/types'
 import { THEMES } from '@shared/types'
 import type { ThemeDefinition } from '@shared/types'
@@ -978,6 +980,27 @@ function WorktreeDropZone({
   )
 }
 
+// ── GitHub Issues section (stub — integration coming soon) ───────────────────
+
+function GitHubIssuesSection(): JSX.Element {
+  return (
+    <>
+      <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
+      <div style={{ padding: '8px 14px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>⬡</span>
+        <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text3)', textTransform: 'uppercase' }}>
+          GitHub Issues
+        </span>
+      </div>
+      <div style={{ padding: '4px 14px 8px' }}>
+        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)', lineHeight: 1.5 }}>
+          GitHub Issues integration coming soon.
+        </span>
+      </div>
+    </>
+  )
+}
+
 // ── Linear section (auth gate + task list) ───────────────────────────────────
 
 function LinearSection(): JSX.Element {
@@ -1179,23 +1202,27 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
   const createWorktree = useWorkspaceStore((s) => s.createWorktree)
   const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
 
+  const loadWsSettings = useWorkspaceSettingsStore((s) => s.loadSettings)
+  const wsSettings = useWorkspaceSettingsStore((s) => activeWorkspaceId ? s.getSettings(activeWorkspaceId) : null)
+
   const linkWorktree = useLinearStore((s) => s.linkWorktree)
   const setDraggedTask = useLinearStore((s) => s.setDraggedTask)
   const draggedTaskId = useLinearStore((s) => s.draggedTaskId)
 
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   const [backHovered, setBackHovered] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const [remoteBranches, setRemoteBranches] = useState<string[]>([])
   const [showBranchSelector, setShowBranchSelector] = useState(false)
 
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
 
-  // Load default branch preference and remote branches on workspace change
+  // Load workspace settings and remote branches on workspace change
   useEffect(() => {
     if (!workspace) return
-    window.api.invoke('workspace:getDefaultBranch', { workspaceId: workspace.id })
-      .then((branch) => setDefaultBranch((branch as string | null) ?? null))
+    loadWsSettings(workspace.id)
+      .then((s) => setDefaultBranch(s.git.mainBranch))
       .catch(() => {})
     window.api.invoke('workspace:listRemoteBranches', { workspacePath: workspace.path })
       .then((branches) => setRemoteBranches(branches as string[]))
@@ -1204,9 +1231,12 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
 
   const handleSetDefaultBranch = async (branch: string): Promise<void> => {
     if (!workspace) return
-    setDefaultBranch(branch || null)
+    const resolved = branch || null
+    setDefaultBranch(resolved)
     setShowBranchSelector(false)
     await window.api.invoke('workspace:setDefaultBranch', { workspaceId: workspace.id, branch }).catch(() => {})
+    // Reload settings so the modal stays in sync
+    loadWsSettings(workspace.id).catch(() => {})
   }
 
   // Subscribe to git-metadata changes so branch renames and external worktree
@@ -1359,7 +1389,41 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         >
           {workspace.name}
         </span>
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          title="Workspace settings"
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text3)',
+            fontSize: 13,
+            lineHeight: 1,
+            padding: '2px 4px',
+            borderRadius: 4,
+            transition: 'color .12s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text2)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+        >
+          ⚙
+        </button>
       </div>
+
+      {showSettingsModal && (
+        <WorkspaceSettingsModal
+          workspaceId={workspace.id}
+          workspacePath={workspace.path}
+          onClose={() => {
+            setShowSettingsModal(false)
+            // Sync defaultBranch after settings save
+            loadWsSettings(workspace.id)
+              .then((s) => setDefaultBranch(s.git.mainBranch))
+              .catch(() => {})
+          }}
+        />
+      )}
 
       {/* Worktree list — fixed min height prevents layout jump on load */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 120 }}>
@@ -1544,8 +1608,9 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         {/* Drop zone for Linear tasks — only visible while dragging */}
         {draggedTaskId && <WorktreeDropZone onDrop={handleDropLinearTask} />}
 
-        {/* Linear integration section */}
-        <LinearSection />
+        {/* Issue tracker integration section */}
+        {wsSettings?.integrations.issueTracker === 'linear' && <LinearSection />}
+        {wsSettings?.integrations.issueTracker === 'github' && <GitHubIssuesSection />}
       </div>
     </div>
   )

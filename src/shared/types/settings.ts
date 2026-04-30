@@ -31,6 +31,27 @@ export const DEFAULT_SETTINGS: AppSettings = {
   zoomLevel: 0,
 }
 
+export type IssueTracker = 'linear' | 'github' | 'none'
+export type ClaudeSettingsMode = 'workspace' | 'global'
+
+export interface WorkspaceSettings {
+  git: {
+    mainBranch: string | null
+  }
+  claude: {
+    settingsMode: ClaudeSettingsMode
+  }
+  integrations: {
+    issueTracker: IssueTracker
+  }
+}
+
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
+  git: { mainBranch: null },
+  claude: { settingsMode: 'workspace' },
+  integrations: { issueTracker: 'linear' },
+}
+
 export const THEMES: ThemeDefinition[] = [
   {
     id: 'midnight',
