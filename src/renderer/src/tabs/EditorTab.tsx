@@ -127,7 +127,23 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'raw' | 'preview'>('raw')
   const [content, setContent] = useState<string>('')
+  const [modified, setModified] = useState(false)
+  const [saving, setSaving] = useState(false)
   const isMd = isMarkdownFile(tab.filePath)
+
+  const save = async (): Promise<void> => {
+    const view = viewRef.current
+    if (!view || !modified) return
+    setSaving(true)
+    try {
+      const text = view.state.doc.toString()
+      await window.api.invoke('fs:writeFile', { path: tab.filePath, content: text })
+      if (isMd) setContent(text)
+      setModified(false)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     const container = containerRef.current
@@ -141,9 +157,8 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
           path: tab.filePath
         })) as { content: string }
 
-        if (isMd) {
-          setContent(result.content)
-        }
+        setContent(result.content)
+        setModified(false)
 
         const lang = getLanguageExtension(tab.filePath)
 
@@ -158,7 +173,11 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
               '.cm-scroller': { overflow: 'auto' },
               '.cm-content': { fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace" }
             }),
-            EditorState.readOnly.of(false)
+            EditorView.updateListener.of((update) => {
+              if (update.docChanged) {
+                setModified(true)
+              }
+            }),
           ]
         })
 
@@ -191,42 +210,81 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
     : ''
 
   return (
-    <div className="h-full w-full overflow-hidden bg-zinc-900" style={{ position: 'relative' }}>
-      {isMd && !loading && (
+    <div
+      className="h-full w-full overflow-hidden bg-zinc-900"
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+          e.preventDefault()
+          save()
+        }
+      }}
+    >
+      {!loading && (
         <>
-          <style>{previewStyles}</style>
+          {isMd && <style>{previewStyles}</style>}
           <div style={{
             position: 'absolute',
             top: '10px',
             right: '14px',
             zIndex: 10,
             display: 'flex',
-            gap: '2px',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            border: '1px solid var(--border)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
+            gap: '6px',
+            alignItems: 'center',
           }}>
-            {(['raw', 'preview'] as const).map((m) => (
+            {modified && (
               <button
-                key={m}
-                onClick={() => setMode(m)}
+                onClick={save}
+                disabled={saving}
                 style={{
-                  padding: '3px 12px',
+                  padding: '3px 10px',
                   fontSize: '11px',
                   fontFamily: 'var(--mono)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: mode === m ? 'var(--accent-dim)' : 'var(--surface2)',
-                  color: mode === m ? 'var(--accent2)' : 'var(--text3)',
-                  transition: 'background 0.15s, color 0.15s',
-                  textTransform: 'capitalize'
+                  fontWeight: 600,
+                  cursor: saving ? 'default' : 'pointer',
+                  border: '1px solid var(--accent)',
+                  borderRadius: '6px',
+                  background: 'var(--accent-dim)',
+                  color: 'var(--accent2)',
+                  opacity: saving ? 0.6 : 1,
+                  transition: 'all 0.15s',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
                 }}
               >
-                {m}
+                {saving ? 'Saving...' : '● Save'}
               </button>
-            ))}
+            )}
+            {isMd && (
+              <div style={{
+                display: 'flex',
+                gap: '2px',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                border: '1px solid var(--border)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
+              }}>
+                {(['raw', 'preview'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    style={{
+                      padding: '3px 12px',
+                      fontSize: '11px',
+                      fontFamily: 'var(--mono)',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: mode === m ? 'var(--accent-dim)' : 'var(--surface2)',
+                      color: mode === m ? 'var(--accent2)' : 'var(--text3)',
+                      transition: 'background 0.15s, color 0.15s',
+                      textTransform: 'capitalize'
+                    }}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -240,7 +298,7 @@ export function EditorTab({ tab }: { tab: EditorTabType }): JSX.Element {
       <div
         ref={containerRef}
         className="h-full w-full"
-        style={{ display: loading || (isMd && mode === 'preview') ? 'none' : 'block' }}
+        style={{ display: loading || (isMd && mode === 'preview') ? 'none' : 'block', flex: 1 }}
       />
 
       {isMd && mode === 'preview' && !loading && (
