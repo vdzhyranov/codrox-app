@@ -32,6 +32,7 @@
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
     "typecheck": "tsc --noEmit",
+    "dead-code": "fallow dead-code",
     "test": "vitest run",
     "postinstall": "electron-rebuild",
     "dist": "electron-builder"
@@ -130,6 +131,7 @@
     "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "fallow": "^2.56.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
