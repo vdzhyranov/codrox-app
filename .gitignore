@@ -16,3 +16,4 @@ coverage/
 .forge/
 *.tsbuildinfo
 .mcp.json
+.fallow/

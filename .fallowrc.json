@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "src/main/index.ts",
+    "src/mcp-server/index.ts",
+    "src/preload/index.ts",
+    "src/renderer/src/main.tsx"
+  ],
+  "ignorePatterns": [
+    "out/**",
+    "resources/**",
+    "dist/**"
+  ],
+  "rules": {
+    "unused-dependencies": "warn"
+  }
+}
