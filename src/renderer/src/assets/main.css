@@ -103,6 +103,14 @@ body {
   50% { opacity: 0.4; }
 }
 
+@keyframes agentShimmer {
+  0% { left: -55%; }
+  100% { left: 120%; }
+}
+.agent-shimmer {
+  animation: agentShimmer 1.8s ease-in-out infinite;
+}
+
 /* Spin animation */
 @keyframes spin {
   from { transform: rotate(0deg); }
