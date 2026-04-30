@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -89,9 +90,9 @@ export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef
               },
               text: pathText,
               activate() {
-                // Open file path in the app's file viewer via the tab system
-                const filePath = pathText.replace(/:\d+(:\d+)?$/, '')
-                window.api.invoke('shell:openPath', { path: filePath })
+                const rawPath = pathText.replace(/:\d+(:\d+)?$/, '')
+                const resolved = rawPath.startsWith('/') ? rawPath : resolvePath(cwd, rawPath)
+                useFileTreeStore.getState().openFile(resolved)
               },
             })
           }
@@ -194,4 +195,13 @@ export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef
   // workspaceId intentionally excluded — captured via ref to prevent PTY teardown on workspace switch
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ptyId, worktreeId, cwd, type, containerRef])
+}
+
+function resolvePath(base: string, rel: string): string {
+  const parts = base.split('/')
+  for (const seg of rel.split('/')) {
+    if (seg === '..') parts.pop()
+    else if (seg !== '.') parts.push(seg)
+  }
+  return parts.join('/')
 }
