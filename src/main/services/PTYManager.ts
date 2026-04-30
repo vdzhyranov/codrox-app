@@ -2,6 +2,7 @@ import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { claudeEnvManager } from './ClaudeEnvManager'
 import { persistenceService } from './PersistenceService'
+import type { WorkspaceSettings } from '@shared/types'
 
 interface PTYSession {
   pty: IPty
@@ -71,7 +72,9 @@ class PTYManager {
           .getWorkspaces()
           .find((w) => w.id === options.workspaceId)?.path
         claudeEnvManager.materializeWorkspace(options.workspaceId, workspacePath)
-        workspaceEnv = claudeEnvManager.getEnvForWorkspace(options.workspaceId)
+        const wsSettings = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${options.workspaceId}`)
+        const settingsMode = wsSettings?.claude?.settingsMode ?? 'workspace'
+        workspaceEnv = claudeEnvManager.getEnvForWorkspace(options.workspaceId, settingsMode)
       } catch (err) {
         console.warn('[PTYManager] failed to materialize workspace home:', err)
       }

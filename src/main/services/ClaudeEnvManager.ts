@@ -154,14 +154,18 @@ class ClaudeEnvManager {
 
   /**
    * Environment variables to inject into every PTY spawned for a workspace.
-   * CLAUDE_CONFIG_DIR redirects Claude's config away from ~/.claude so each
-   * workspace has its own isolated history, settings, and MCP config.
+   *
+   * settingsMode controls CLAUDE_CONFIG_DIR:
+   *   'workspace' (default) — isolated per-workspace config dir
+   *   'global'              — omit CLAUDE_CONFIG_DIR so Claude uses ~/.claude
    */
-  getEnvForWorkspace(workspaceId: string): Record<string, string> {
+  getEnvForWorkspace(workspaceId: string, settingsMode: 'workspace' | 'global' = 'workspace'): Record<string, string> {
     const env: Record<string, string> = {
-      CLAUDE_CONFIG_DIR: this.claudeDir(workspaceId),
       CODROX_WORKSPACE: workspaceId,
       CODROX_RUNTIME_DIR: this.globalRuntimeDir()
+    }
+    if (settingsMode === 'workspace') {
+      env.CLAUDE_CONFIG_DIR = this.claudeDir(workspaceId)
     }
     if (this.hookListenerUrl) {
       env.CODROX_HOOK_URL = this.hookListenerUrl
