@@ -10,6 +10,7 @@ import { register as registerSettings } from './settings.ipc'
 import { register as registerVersion } from './version.ipc'
 import { register as registerGraph } from './graph.ipc'
 import { register as registerTokens } from './tokens.ipc'
+import { register as registerUsage } from './usage.ipc'
 let registered = false
 
 export function registerAllHandlers(mainWindow: BrowserWindow): void {
@@ -26,4 +27,5 @@ export function registerAllHandlers(mainWindow: BrowserWindow): void {
   registerVersion(ipcMain, mainWindow)
   registerGraph(ipcMain, mainWindow)
   registerTokens(ipcMain)
+  registerUsage(ipcMain)
 }

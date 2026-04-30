@@ -8,7 +8,8 @@ import { worktreeWatcher } from '../services/WorktreeWatcher'
 import { claudeEnvManager } from '../services/ClaudeEnvManager'
 import { addManagedPath, getManagedPaths, removeManagedPath } from '../services/WorktreeRegistry'
 import { subAgentWatcher } from '../services/SubAgentWatcher'
-import type { Worktree, SessionData } from '@shared/types'
+import type { Worktree, SessionData, WorkspaceSettings } from '@shared/types'
+import { DEFAULT_WORKSPACE_SETTINGS } from '@shared/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -97,21 +98,53 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     'worktree:create',
     async (
       _event,
-      payload: { workspaceId: string; workspacePath: string; branch: string; name: string }
+      payload: { workspaceId: string; workspacePath: string; branch: string; name: string; baseBranch?: string }
     ) => {
-      const { workspaceId, workspacePath, branch, name } = payload
+      const { workspaceId, workspacePath, branch, name, baseBranch } = payload
       const worktreePath = join(workspacePath, '..', `${basename(workspacePath)}-${branch}`)
-      await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
-        cwd: workspacePath
-      })
+      const opts = { cwd: workspacePath }
+
+      // Fetch latest from origin so the new branch starts from up-to-date state
+      await execFileAsync('git', ['fetch', 'origin'], opts).catch(() => {})
+
+      // Determine start point: explicit baseBranch > origin/HEAD > local HEAD
+      let startPoint: string | null = null
+      if (baseBranch) {
+        startPoint = `origin/${baseBranch}`
+      } else {
+        try {
+          const { stdout } = await execFileAsync(
+            'git',
+            ['symbolic-ref', 'refs/remotes/origin/HEAD'],
+            opts
+          )
+          // stdout is e.g. "refs/remotes/origin/main\n" → strip prefix
+          startPoint = stdout.trim().replace('refs/remotes/', '')
+        } catch {
+          // origin/HEAD not set; fall through to null
+        }
+      }
+
+      const addArgs = startPoint
+        ? ['worktree', 'add', '-b', branch, worktreePath, startPoint]
+        : ['worktree', 'add', '-b', branch, worktreePath]
+      await execFileAsync('git', addArgs, opts)
+
       // Register this path as Codrox-managed so it can be distinguished from external worktrees
       try {
-        const { stdout } = await execFileAsync('git', ['rev-parse', '--git-common-dir'], { cwd: workspacePath })
-        const raw = stdout.trim()
+        const { stdout: commonDirOut } = await execFileAsync('git', ['rev-parse', '--git-common-dir'], opts)
+        const raw = commonDirOut.trim()
         const gitCommonDir = raw.startsWith('/') ? raw : join(workspacePath, raw)
         addManagedPath(gitCommonDir, worktreePath)
       } catch {
         // best-effort
+      }
+
+      // Write MCP config into the new worktree so codrox-graph is available there
+      try {
+        claudeEnvManager.writeMcpConfig('', worktreePath)
+      } catch (err) {
+        console.warn('[worktree:create] writeMcpConfig failed:', err)
       }
       // Use path as ID — consistent with worktree:list
       const worktree: Worktree = {
@@ -258,4 +291,59 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('session:load', () => {
     return persistenceService.loadSession()
   })
+
+  // Default branch preference — reads/writes through WorkspaceSettings (single source of truth)
+  ipcMain.handle('workspace:getDefaultBranch', (_event, payload: { workspaceId: string }) => {
+    const settings = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${payload.workspaceId}`)
+    if (settings?.git?.mainBranch !== undefined) return settings.git.mainBranch
+    // Migrate from legacy key
+    return persistenceService.getAppState<string>(`workspace:defaultBranch:${payload.workspaceId}`)
+  })
+
+  ipcMain.handle(
+    'workspace:setDefaultBranch',
+    (_event, payload: { workspaceId: string; branch: string }) => {
+      const existing = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${payload.workspaceId}`)
+      const updated: WorkspaceSettings = {
+        ...DEFAULT_WORKSPACE_SETTINGS,
+        ...existing,
+        git: { mainBranch: payload.branch || null }
+      }
+      persistenceService.setAppState(`workspace:settings:${payload.workspaceId}`, updated)
+      return { success: true }
+    }
+  )
+
+  ipcMain.handle('workspace:getSettings', (_event, payload: { workspaceId: string }) => {
+    const settings = persistenceService.getAppState<WorkspaceSettings>(`workspace:settings:${payload.workspaceId}`)
+    if (settings) {
+      return { ...DEFAULT_WORKSPACE_SETTINGS, ...settings, git: { ...DEFAULT_WORKSPACE_SETTINGS.git, ...settings.git }, claude: { ...DEFAULT_WORKSPACE_SETTINGS.claude, ...settings.claude }, integrations: { ...DEFAULT_WORKSPACE_SETTINGS.integrations, ...settings.integrations } }
+    }
+    // Migrate legacy defaultBranch to new settings structure
+    const legacyBranch = persistenceService.getAppState<string>(`workspace:defaultBranch:${payload.workspaceId}`)
+    return { ...DEFAULT_WORKSPACE_SETTINGS, git: { mainBranch: legacyBranch ?? null } }
+  })
+
+  ipcMain.handle('workspace:saveSettings', (_event, payload: { workspaceId: string; settings: WorkspaceSettings }) => {
+    persistenceService.setAppState(`workspace:settings:${payload.workspaceId}`, payload.settings)
+    return { success: true }
+  })
+
+  ipcMain.handle(
+    'workspace:listRemoteBranches',
+    async (_event, payload: { workspacePath: string }) => {
+      try {
+        const { stdout } = await execFileAsync('git', ['branch', '-r'], {
+          cwd: payload.workspacePath
+        })
+        return stdout
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && !l.includes('->'))
+          .map((l) => l.replace(/^origin\//, ''))
+      } catch {
+        return []
+      }
+    }
+  )
 }

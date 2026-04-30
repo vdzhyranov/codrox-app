@@ -2,8 +2,8 @@ export type { Workspace, Worktree, WorktreeState, AppState, WorktreeMode, Sessio
 export type { TabType, TabBase, EditorTab, TerminalTab, ClaudeTab, Tab } from './tabs'
 export type { GitStatusType, FileTreeNode, FileChangeEvent } from './filesystem'
 export type { GitFileStatus, GitDiffHunk, GitDiff } from './git'
-export type { AppSettings, ThemeDefinition, ThemeColors } from './settings'
-export { THEMES, DEFAULT_SETTINGS } from './settings'
+export type { AppSettings, ThemeDefinition, ThemeColors, WorkspaceSettings, IssueTracker, ClaudeSettingsMode } from './settings'
+export { THEMES, DEFAULT_SETTINGS, DEFAULT_WORKSPACE_SETTINGS } from './settings'
 export type {
   IpcChannels,
   IpcEventChannels,
