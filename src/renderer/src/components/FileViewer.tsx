@@ -462,18 +462,12 @@ export function FileViewer(): JSX.Element {
         )}
         {!loading && !error && viewMode === 'content' && content !== null && (
           isMarkdown && !mdRaw ? (
-<<<<<<< HEAD
             <>
               <style>{fileViewerMdStyles}</style>
               <div className="md-file-view">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
               </div>
             </>
-=======
-            <div style={{ padding: '8px 12px', height: '100%', overflow: 'auto', boxSizing: 'border-box' }}>
-              <MarkdownView content={content} />
-            </div>
->>>>>>> main
           ) : (
             <CodeEditor
               key={filePath}
