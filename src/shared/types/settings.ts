@@ -23,6 +23,7 @@ export interface AppSettings {
   theme: string
   fontSize: number   // actual px value (11–18)
   zoomLevel: number
+  defaultShell?: string  // absolute path, e.g. /bin/zsh; undefined = use $SHELL
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

@@ -31,11 +31,13 @@ interface SettingsStore {
   theme: string
   fontSize: number
   zoomLevel: number
+  defaultShell: string | undefined
   loaded: boolean
   load: () => Promise<void>
   setTheme: (themeId: string) => void
   setFontSize: (px: number) => void
   setZoomLevel: (level: number) => void
+  setDefaultShell: (shell: string | undefined) => void
   syncZoomFromMain: (level: number) => void
 }
 
@@ -43,6 +45,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   theme: DEFAULT_SETTINGS.theme,
   fontSize: DEFAULT_SETTINGS.fontSize,
   zoomLevel: DEFAULT_SETTINGS.zoomLevel,
+  defaultShell: undefined,
   loaded: false,
 
   load: async () => {
@@ -52,7 +55,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const theme = THEMES.find((t) => t.id === settings.theme) ?? THEMES[0]
       applyTheme(theme)
       applyFontSize(settings.fontSize)
-      set({ theme: settings.theme, fontSize: settings.fontSize, zoomLevel: settings.zoomLevel, loaded: true })
+      set({
+        theme: settings.theme,
+        fontSize: settings.fontSize,
+        zoomLevel: settings.zoomLevel,
+        defaultShell: settings.defaultShell,
+        loaded: true,
+      })
     } catch {
       set({ loaded: true })
     }
@@ -64,7 +73,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     applyTheme(theme)
     set({ theme: themeId })
     const s = get()
-    persist({ theme: themeId, fontSize: s.fontSize, zoomLevel: s.zoomLevel })
+    persist({ theme: themeId, fontSize: s.fontSize, zoomLevel: s.zoomLevel, defaultShell: s.defaultShell })
   },
 
   setFontSize: (px: number) => {
@@ -72,7 +81,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     applyFontSize(clamped)
     set({ fontSize: clamped })
     const s = get()
-    persist({ theme: s.theme, fontSize: clamped, zoomLevel: s.zoomLevel })
+    persist({ theme: s.theme, fontSize: clamped, zoomLevel: s.zoomLevel, defaultShell: s.defaultShell })
   },
 
   setZoomLevel: (level: number) => {
@@ -80,12 +89,18 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     window.api.invoke('settings:setZoom', { level: clamped }).catch(() => {})
     set({ zoomLevel: clamped })
     const s = get()
-    persist({ theme: s.theme, fontSize: s.fontSize, zoomLevel: clamped })
+    persist({ theme: s.theme, fontSize: s.fontSize, zoomLevel: clamped, defaultShell: s.defaultShell })
+  },
+
+  setDefaultShell: (shell: string | undefined) => {
+    set({ defaultShell: shell })
+    const s = get()
+    persist({ theme: s.theme, fontSize: s.fontSize, zoomLevel: s.zoomLevel, defaultShell: shell })
   },
 
   syncZoomFromMain: (level: number) => {
     set({ zoomLevel: level })
     const s = get()
-    persist({ theme: s.theme, fontSize: s.fontSize, zoomLevel: level })
+    persist({ theme: s.theme, fontSize: s.fontSize, zoomLevel: level, defaultShell: s.defaultShell })
   },
 }))

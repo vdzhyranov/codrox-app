@@ -16,7 +16,7 @@ import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 
 const fileViewerMdStyles = `
-  .md-file-view { font-size: 12px; color: var(--text); line-height: 1.6; font-family: var(--sans); }
+  .md-file-view { font-size: 12px; color: var(--text); line-height: 1.6; font-family: var(--sans); height: 100%; overflow-y: auto; padding: 16px 20px; box-sizing: border-box; }
   .md-file-view h1 { font-size: 16px; font-weight: 800; margin: 16px 0 6px; color: var(--text); }
   .md-file-view h2 { font-size: 14px; font-weight: 700; margin: 14px 0 4px; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 2px; }
   .md-file-view h3 { font-size: 13px; font-weight: 700; margin: 12px 0 4px; color: var(--text); }

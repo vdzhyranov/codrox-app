@@ -1,10 +1,16 @@
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import { usePTY } from '@renderer/hooks/usePTY'
 import { useActiveWorkspaceId } from '@renderer/hooks/useActiveWorkspaceId'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
+import { useSettingsStore } from '@renderer/store/settingsStore'
 import { FileViewer } from '@renderer/components/FileViewer'
 import { AgentOutputViewer } from '@renderer/components/AgentOutputViewer'
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface ShellInfo {
+  path: string
+  name: string
+}
 
 interface PaneLeaf {
   type: 'leaf'
@@ -12,6 +18,7 @@ interface PaneLeaf {
   panelType: 'claude' | 'terminal'
   title: string
   sessionName: string
+  shell?: string
 }
 
 interface PaneSplit {
@@ -119,9 +126,10 @@ interface PanelTerminalProps {
   sessionName: string
   worktreePath: string
   type: 'claude' | 'terminal'
+  shell?: string
 }
 
-function PanelTerminal({ sessionName, worktreePath, type }: PanelTerminalProps): JSX.Element {
+function PanelTerminal({ sessionName, worktreePath, type, shell }: PanelTerminalProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const activeWorkspaceId = useActiveWorkspaceId()
 
@@ -132,6 +140,7 @@ function PanelTerminal({ sessionName, worktreePath, type }: PanelTerminalProps):
     cwd: worktreePath,
     type,
     containerRef,
+    shell,
   })
 
   return (
@@ -382,6 +391,7 @@ function LeafPane({
         sessionName={node.sessionName}
         worktreePath={worktreePath}
         type={node.panelType}
+        shell={node.shell}
       />
 
       {showDropZone && (
@@ -545,9 +555,33 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
   const [topBottomSplit, setTopBottomSplit] = useState(75)
   const outerRef = useRef<HTMLDivElement>(null)
 
+  // ── Shell picker state ──
+  const defaultShell = useSettingsStore((s) => s.defaultShell)
+  const [availableShells, setAvailableShells] = useState<ShellInfo[]>([])
+  const [shellDropdownOpen, setShellDropdownOpen] = useState(false)
+  const shellDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    ;(window.api.invoke('shell:list', undefined) as Promise<ShellInfo[]>)
+      .then(setAvailableShells)
+      .catch(() => {})
+  }, [])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!shellDropdownOpen) return
+    const handler = (e: MouseEvent): void => {
+      if (shellDropdownRef.current && !shellDropdownRef.current.contains(e.target as Node)) {
+        setShellDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [shellDropdownOpen])
+
   // ── Add panel (splits alongside the focused pane) ──
   const addPanel = useCallback(
-    (type: 'claude' | 'terminal') => {
+    (type: 'claude' | 'terminal', shell?: string) => {
       const id = `${type}-${Date.now()}`
       const titles = { claude: 'Claude', terminal: 'Terminal' }
       const newLeaf: PaneLeaf = {
@@ -556,6 +590,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
         panelType: type,
         title: titles[type],
         sessionName: makeSessionName(id),
+        shell: type === 'terminal' ? (shell ?? defaultShell) : undefined,
       }
 
       setPaneTree((prev) => {
@@ -566,7 +601,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
       })
       setFocusedPaneId(id)
     },
-    [makeSessionName, focusedPaneId],
+    [makeSessionName, focusedPaneId, defaultShell],
   )
 
   // ── Close panel ──
@@ -812,9 +847,84 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
         {isWorkTab && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px' }}>
-              <HeaderButton type="terminal" onClick={() => addPanel('terminal')}>
-                + Terminal
-              </HeaderButton>
+              {/* Terminal button with shell picker */}
+              <div ref={shellDropdownRef} style={{ position: 'relative', display: 'flex' }}>
+                <div style={{ display: 'flex', alignItems: 'center', borderRadius: 3, overflow: 'visible' }}>
+                  <HeaderButton type="terminal" onClick={() => addPanel('terminal')} style={{ borderRadius: '3px 0 0 3px' }}>
+                    + Terminal
+                  </HeaderButton>
+                  {availableShells.length > 1 && (
+                    <button
+                      title="Select shell"
+                      onClick={() => setShellDropdownOpen((v) => !v)}
+                      style={{
+                        height: 20,
+                        padding: '0 4px',
+                        borderRadius: '0 3px 3px 0',
+                        fontSize: 9,
+                        fontFamily: 'var(--mono)',
+                        cursor: 'pointer',
+                        background: 'var(--surface2)',
+                        color: 'var(--text3)',
+                        border: '1px solid var(--border)',
+                        borderLeft: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'color .1s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+                    >
+                      ▾
+                    </button>
+                  )}
+                </div>
+                {shellDropdownOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: 4,
+                      background: 'var(--surface2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      zIndex: 1000,
+                      minWidth: 180,
+                      boxShadow: '0 4px 16px rgba(0,0,0,.4)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {availableShells.map((s) => (
+                      <button
+                        key={s.path}
+                        onClick={() => { addPanel('terminal', s.path); setShellDropdownOpen(false) }}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          width: '100%',
+                          padding: '6px 10px',
+                          background: s.path === (defaultShell ?? availableShells[0]?.path) ? 'var(--surface3)' : 'transparent',
+                          color: 'var(--text)',
+                          border: 'none',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          gap: 1,
+                          transition: 'background .1s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-dim)' }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = s.path === (defaultShell ?? availableShells[0]?.path) ? 'var(--surface3)' : 'transparent'
+                        }}
+                      >
+                        <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600 }}>{s.name}</span>
+                        <span style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{s.path}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <HeaderButton type="claude" onClick={() => addPanel('claude')}>
                 + Claude
               </HeaderButton>
@@ -990,12 +1100,14 @@ interface HeaderButtonProps {
   type: 'claude' | 'terminal'
   onClick: () => void
   children: React.ReactNode
+  style?: React.CSSProperties
 }
 
 function HeaderButton({
   type,
   onClick,
   children,
+  style: styleProp,
 }: HeaderButtonProps): JSX.Element {
   const isAccent = type === 'claude'
 
@@ -1018,6 +1130,7 @@ function HeaderButton({
         background: isAccent ? 'var(--accent-dim)' : 'var(--green-dim)',
         color: isAccent ? 'var(--accent2)' : 'var(--green)',
         border: isAccent ? '1px solid var(--accent)' : '1px solid var(--green)',
+        ...styleProp,
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = isAccent

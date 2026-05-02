@@ -1,5 +1,6 @@
 import { IpcMain, BrowserWindow, shell } from 'electron'
 import { ptyManager } from '../services/PTYManager'
+import { shellDetectionService } from '../services/ShellDetectionService'
 
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ptyManager.setCallbacks(
@@ -15,8 +16,8 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     }
   )
 
-  // Kick off claude binary resolution immediately so it's ready before the first pty:create
-  ptyManager.warmClaudeResolution()
+  // Detect available shells + warm Claude resolution at startup
+  shellDetectionService.warm()
 
   ipcMain.handle('pty:create', async (_event, payload: {
     id: string
@@ -27,7 +28,7 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     args?: string[]
     type: 'claude' | 'terminal'
   }) => {
-    console.log('[PTY] Creating:', payload.id, payload.type, payload.cwd, payload.workspaceId ?? '(no workspace)')
+    console.log('[PTY] Creating:', payload.id, payload.type, payload.cwd, payload.shell ?? '(default shell)')
     await ptyManager.create(payload.id, {
       worktreeId: payload.worktreeId,
       workspaceId: payload.workspaceId,
@@ -39,7 +40,6 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle('pty:write', (_event, payload: { id: string; data: string }) => {
-    console.log('[PTY] Write to:', payload.id, JSON.stringify(payload.data).slice(0, 30))
     ptyManager.write(payload.id, payload.data)
   })
 
@@ -57,6 +57,10 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
 
   ipcMain.handle('pty:getBuffer', (_event, payload: { id: string }) => {
     return ptyManager.getBuffer(payload.id)
+  })
+
+  ipcMain.handle('shell:list', () => {
+    return shellDetectionService.detectShells()
   })
 
   ipcMain.handle('shell:openExternal', (_event, payload: { url: string }) => {

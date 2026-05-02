@@ -212,6 +212,10 @@ export interface IpcChannels {
     request: { workspacePath: string }
     response: TokenSummary
   }
+  'shell:list': {
+    request: void
+    response: Array<{ path: string; name: string }>
+  }
 }
 
 // Streaming event channel payload types
