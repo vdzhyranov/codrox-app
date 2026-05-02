@@ -140,9 +140,11 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
         // best-effort
       }
 
-      // Write MCP config into the new worktree so codrox-graph is available there
+      // Write MCP config into the new worktree so codrox-graph is available there.
+      // Pass workspacePath as the --workspace arg so the MCP server opens the main
+      // workspace graph (where all nodes live), not an empty worktree-scoped one.
       try {
-        claudeEnvManager.writeMcpConfig('', worktreePath)
+        claudeEnvManager.writeMcpConfig('', workspacePath, worktreePath)
       } catch (err) {
         console.warn('[worktree:create] writeMcpConfig failed:', err)
       }
