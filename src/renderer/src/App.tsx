@@ -5,6 +5,7 @@ import { RightPanel } from '@renderer/layout/RightPanel'
 import { useWorkspaceStore } from '@renderer/store/workspaceStore'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
 import { useSettingsStore } from '@renderer/store/settingsStore'
+import { usePTYPrewarm } from '@renderer/hooks/usePTYPrewarm'
 import type { SessionData } from '@shared/types'
 import logoImg from '@renderer/assets/logo.png'
 
@@ -152,6 +153,8 @@ function App(): JSX.Element {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
   const modeByWorktree = useWorkspaceStore((s) => s.modeByWorktree)
+
+  usePTYPrewarm()
 
   const [sidebarPct, setSidebarPct] = useState(SIDEBAR_DEFAULT)
   const [rightPct, setRightPct] = useState(RIGHT_DEFAULT)

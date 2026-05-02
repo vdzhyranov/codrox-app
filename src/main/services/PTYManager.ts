@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
+import { exec } from 'child_process'
 import { claudeEnvManager } from './ClaudeEnvManager'
 import { persistenceService } from './PersistenceService'
 import type { WorkspaceSettings } from '@shared/types'
@@ -28,6 +29,39 @@ class PTYManager {
     | ((id: string, worktreeId: string, prompt: string) => void)
     | null = null
 
+  // Cached resolution of the claude binary path + full login PATH
+  private claudeResolution: Promise<{ bin: string; path: string } | null> | null = null
+
+  private resolveClaudeBin(): Promise<{ bin: string; path: string } | null> {
+    if (!this.claudeResolution) {
+      this.claudeResolution = new Promise((resolve) => {
+        exec(
+          "zsh -lc 'printf \"%s\\t%s\" \"$(which claude 2>/dev/null)\" \"$PATH\"'",
+          { timeout: 8000 },
+          (_err, stdout) => {
+            const tab = stdout.indexOf('\t')
+            if (tab < 0) { resolve(null); return }
+            const bin = stdout.slice(0, tab).trim()
+            const path = stdout.slice(tab + 1).trim()
+            if (bin) {
+              console.log('[PTYManager] resolved claude binary:', bin)
+              resolve({ bin, path })
+            } else {
+              console.warn('[PTYManager] claude binary not found via login shell, will use prompt detection')
+              resolve(null)
+            }
+          }
+        )
+      })
+    }
+    return this.claudeResolution
+  }
+
+  /** Kick off binary resolution eagerly at startup so it's ready by first pty:create */
+  warmClaudeResolution(): void {
+    this.resolveClaudeBin().catch(() => {})
+  }
+
   setCallbacks(
     onData: (id: string, data: string) => void,
     onExit: (id: string, exitCode: number) => void
@@ -36,7 +70,7 @@ class PTYManager {
     this.onExitCallback = onExit
   }
 
-  create(
+  async create(
     id: string,
     options: {
       worktreeId: string
@@ -47,7 +81,7 @@ class PTYManager {
       type: 'claude' | 'terminal'
       env?: Record<string, string>
     }
-  ): void {
+  ): Promise<void> {
     if (this.sessions.has(id)) {
       // PTY already running — caller will reattach, don't destroy
       return
@@ -55,16 +89,30 @@ class PTYManager {
 
     const defaultShell = process.env.SHELL || '/bin/zsh'
     const shell = options.shell || defaultShell
-    // Spawn as a login + interactive shell so the user's zsh/bash config
-    // (PATH additions, nvm, aliases, prompt, claude on PATH) is sourced.
-    // Without -il we'd get a bare environment that can't find user-installed CLIs.
     const isLoginCapable = /\/(zsh|bash)$/.test(shell)
-    const args = options.args || (isLoginCapable ? ['-il'] : [])
 
-    // If we know which workspace this PTY belongs to, materialize the
-    // workspace's fake $HOME and inject the Claude-isolation env vars.
-    // workspacePath is resolved here so writeMcpConfig writes to the right
-    // project directory on every PTY spawn, keeping the entry current.
+    // For claude panels: try fast path — spawn claude directly without login shell startup.
+    // Falls back to login+interactive shell with prompt detection if binary can't be resolved.
+    let spawnArgs: string[]
+    let extraEnv: Record<string, string> = {}
+    let useFastPath = false
+
+    if (options.type === 'claude' && !options.args && isLoginCapable) {
+      const resolution = await this.resolveClaudeBin()
+      if (resolution) {
+        const escapedBin = resolution.bin.replace(/'/g, "'\\''")
+        // Non-interactive shell runs claude directly — no login profile sourcing, no prompt wait
+        spawnArgs = ['-c', `'${escapedBin}' --continue 2>/dev/null || '${escapedBin}'`]
+        extraEnv = { PATH: resolution.path }
+        useFastPath = true
+      } else {
+        spawnArgs = ['-il']
+      }
+    } else {
+      spawnArgs = options.args || (isLoginCapable ? ['-il'] : [])
+    }
+
+    // Materialize workspace env vars (CLAUDE_CONFIG_DIR, hooks, etc.)
     let workspaceEnv: Record<string, string> = {}
     if (options.workspaceId) {
       try {
@@ -84,13 +132,14 @@ class PTYManager {
       ...process.env,
       ...workspaceEnv,
       ...options.env,
+      ...extraEnv,
       TERM: 'xterm-256color',
       LANG: process.env.LANG || 'en_US.UTF-8',
       LC_ALL: process.env.LC_ALL || process.env.LANG || 'en_US.UTF-8'
     } as Record<string, string>
 
     try {
-      const ptyProcess = pty.spawn(shell, args, {
+      const ptyProcess = pty.spawn(shell, spawnArgs, {
         name: 'xterm-256color',
         cols: 120,
         rows: 30,
@@ -129,14 +178,36 @@ class PTYManager {
 
       this.sessions.set(id, session)
 
-      // For claude panels: launch claude inside the shell after it's ready
-      // --continue resumes the most recent conversation for this directory
-      if (options.type === 'claude') {
-        setTimeout(() => {
-          if (this.sessions.has(id)) {
-            ptyProcess.write('claude --continue 2>/dev/null || claude\n')
+      // For claude panels using interactive shell fallback: detect the shell prompt
+      // instead of a fixed timeout so we write the claude command as soon as the shell is ready.
+      if (options.type === 'claude' && !useFastPath) {
+        let claudeLaunched = false
+        let accumulated = ''
+        const promptPattern = /[$%>#]\s*$/m
+
+        const promptListener = ptyProcess.onData((chunk) => {
+          if (claudeLaunched) return
+          accumulated += chunk
+          if (accumulated.length > 512) accumulated = accumulated.slice(-512)
+          if (promptPattern.test(accumulated)) {
+            claudeLaunched = true
+            promptListener.dispose()
+            if (this.sessions.has(id)) {
+              ptyProcess.write('claude --continue 2>/dev/null || claude\n')
+            }
           }
-        }, 500)
+        })
+
+        // Safety fallback in case prompt detection misses (unusual prompts, etc.)
+        setTimeout(() => {
+          if (!claudeLaunched) {
+            claudeLaunched = true
+            try { promptListener.dispose() } catch { /* already disposed */ }
+            if (this.sessions.has(id)) {
+              ptyProcess.write('claude --continue 2>/dev/null || claude\n')
+            }
+          }
+        }, 5000)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

@@ -15,7 +15,10 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     }
   )
 
-  ipcMain.handle('pty:create', (_event, payload: {
+  // Kick off claude binary resolution immediately so it's ready before the first pty:create
+  ptyManager.warmClaudeResolution()
+
+  ipcMain.handle('pty:create', async (_event, payload: {
     id: string
     worktreeId: string
     workspaceId?: string
@@ -25,7 +28,7 @@ export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
     type: 'claude' | 'terminal'
   }) => {
     console.log('[PTY] Creating:', payload.id, payload.type, payload.cwd, payload.workspaceId ?? '(no workspace)')
-    ptyManager.create(payload.id, {
+    await ptyManager.create(payload.id, {
       worktreeId: payload.worktreeId,
       workspaceId: payload.workspaceId,
       cwd: payload.cwd,
