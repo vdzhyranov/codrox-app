@@ -559,34 +559,25 @@ function NewWorktreeButton({ onClick }: { onClick: () => void }): JSX.Element {
   )
 }
 
-// ── Workspace selector card ────────────────────────────────────────────────────
+// ── Compact workspace row ─────────────────────────────────────────────────────
 
-function WorkspaceCard({
+function WorkspaceRow({
   workspace,
   index,
   isActive,
   onSelect,
+  onSettings,
   onRemove,
 }: {
   workspace: Workspace
   index: number
   isActive: boolean
   onSelect: () => void
+  onSettings: () => void
   onRemove: () => void
 }): JSX.Element {
   const [hovered, setHovered] = useState(false)
-  const [gitBranch, setGitBranch] = useState<string | null>(null)
   const dotColor = getDotColor(index)
-
-  useEffect(() => {
-    window.api.invoke('git:branch', { path: workspace.path })
-      .then((b) => setGitBranch(b as string | null))
-      .catch(() => setGitBranch(null))
-  }, [workspace.path])
-
-  const lastOpened = workspace.lastOpened
-    ? new Date(workspace.lastOpened).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    : null
 
   return (
     <div
@@ -594,202 +585,84 @@ function WorkspaceCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        margin: '0 10px 8px',
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: isActive
-          ? '1px solid rgba(124,106,247,.5)'
-          : hovered
-            ? '1px solid var(--border2)'
-            : '1px solid var(--border)',
-        background: isActive
-          ? 'rgba(124,106,247,.07)'
-          : hovered
-            ? 'var(--surface2)'
-            : 'var(--surface)',
-        cursor: 'pointer',
-        transition: 'all .12s',
-        position: 'relative',
-      }}
-    >
-      {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: dotColor,
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontSize: 'var(--fs-icon)',
-            fontWeight: 600,
-            color: isActive ? 'var(--text)' : 'var(--text2)',
-            flex: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {workspace.name}
-        </span>
-        {/* Remove button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text3)',
-            fontSize: 13,
-            lineHeight: 1,
-            padding: '0 1px',
-            flexShrink: 0,
-            opacity: hovered ? 1 : 0.3,
-            transition: 'opacity .12s, color .12s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-        >
-          ×
-        </button>
-      </div>
-
-      {/* Path */}
-      <div
-        style={{
-          fontSize: 'var(--fs-xs)',
-          color: 'var(--text3)',
-          fontFamily: 'var(--mono)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          marginBottom: 6,
-        }}
-        title={workspace.path}
-      >
-        {workspace.path}
-      </div>
-
-      {/* Meta row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {gitBranch && (
-          <span
-            style={{
-              fontSize: 'var(--fs-xs)',
-              color: 'var(--green)',
-              background: 'var(--green-dim)',
-              border: '1px solid rgba(62,207,142,.2)',
-              borderRadius: 4,
-              padding: '1px 5px',
-              fontFamily: 'var(--mono)',
-            }}
-          >
-            {gitBranch}
-          </span>
-        )}
-        {lastOpened && (
-          <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)', marginLeft: 'auto' }}>
-            {lastOpened}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Add workspace card ─────────────────────────────────────────────────────────
-
-function AddWorkspaceCard({ onClick }: { onClick: () => void }): JSX.Element {
-  const [hovered, setHovered] = useState(false)
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        margin: '0 10px 8px',
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: hovered ? '1px solid rgba(124,106,247,.4)' : '1px dashed var(--border)',
-        background: hovered ? 'rgba(124,106,247,.04)' : 'transparent',
-        cursor: 'pointer',
-        transition: 'all .12s',
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
+        height: 28,
+        paddingLeft: 14,
+        paddingRight: 8,
+        gap: 7,
+        cursor: 'pointer',
+        background: isActive ? 'var(--accent-dim)' : hovered ? 'var(--surface2)' : 'transparent',
+        borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+        transition: 'background .1s',
       }}
     >
-      <span style={{ fontSize: 16, color: hovered ? 'var(--accent2)' : 'var(--text3)', lineHeight: 1 }}>+</span>
+      <div
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: dotColor,
+          flexShrink: 0,
+        }}
+      />
       <span
         style={{
           fontSize: 'var(--fs-md)',
-          color: hovered ? 'var(--accent2)' : 'var(--text3)',
-          letterSpacing: '0.04em',
+          color: isActive ? 'var(--text)' : 'var(--text2)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
       >
-        Add Workspace
+        {workspace.name}
       </span>
-    </div>
-  )
-}
-
-// ── Workspace selector (shown when no workspace selected) ──────────────────────
-
-function WorkspaceSelector({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.Element {
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
-  const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
-  const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
-
-  const handleSelect = (ws: Workspace): void => {
-    setActiveWorkspace(ws.id)
-    loadWorktrees(ws.id, ws.path).catch(() => {})
-  }
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        overflowY: 'auto',
-      }}
-    >
-      <SectionHeader label="Workspaces" />
-      {workspaces.length === 0 ? (
-        <p
-          style={{
-            fontSize: 'var(--fs-sm)',
-            color: 'var(--text3)',
-            padding: '8px 14px 12px',
-            lineHeight: 1.6,
-          }}
-        >
-          Click below to add a workspace
-        </p>
-      ) : (
-        <div style={{ paddingTop: 4 }}>
-          {workspaces.map((ws, i) => (
-            <WorkspaceCard
-              key={ws.id}
-              workspace={ws}
-              index={i}
-              isActive={ws.id === activeWorkspaceId}
-              onSelect={() => handleSelect(ws)}
-              onRemove={() => removeWorkspace(ws.id)}
-            />
-          ))}
-        </div>
-      )}
-      <AddWorkspaceCard onClick={onAddWorkspace} />
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onSettings()
+        }}
+        title="Workspace settings"
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'var(--text3)',
+          fontSize: 11,
+          lineHeight: 1,
+          padding: '0 2px',
+          flexShrink: 0,
+          opacity: hovered ? 0.7 : 0,
+          transition: 'opacity .12s, color .12s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text2)'; e.currentTarget.style.opacity = '1' }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)'; e.currentTarget.style.opacity = hovered ? '0.7' : '0' }}
+      >
+        ⚙
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'var(--text3)',
+          fontSize: 13,
+          lineHeight: 1,
+          padding: '0 2px',
+          flexShrink: 0,
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity .12s, color .12s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+      >
+        ×
+      </button>
     </div>
   )
 }
@@ -1192,7 +1065,7 @@ function LinearSection(): JSX.Element {
 
 // ── Active workspace view ─────────────────────────────────────────────────────
 
-function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
+function ActiveWorkspaceView(): JSX.Element {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeWorktreeId = useWorkspaceStore((s) => s.activeWorktreeId)
@@ -1210,34 +1083,13 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
   const draggedTaskId = useLinearStore((s) => s.draggedTaskId)
 
   const [showNewWorktree, setShowNewWorktree] = useState(false)
-  const [backHovered, setBackHovered] = useState(false)
-  const [showSettingsModal, setShowSettingsModal] = useState(false)
-  const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
-  const [remoteBranches, setRemoteBranches] = useState<string[]>([])
-  const [showBranchSelector, setShowBranchSelector] = useState(false)
 
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
 
-  // Load workspace settings and remote branches on workspace change
   useEffect(() => {
     if (!workspace) return
-    loadWsSettings(workspace.id)
-      .then((s) => setDefaultBranch(s.git.mainBranch))
-      .catch(() => {})
-    window.api.invoke('workspace:listRemoteBranches', { workspacePath: workspace.path })
-      .then((branches) => setRemoteBranches(branches as string[]))
-      .catch(() => {})
-  }, [workspace?.id, workspace?.path])
-
-  const handleSetDefaultBranch = async (branch: string): Promise<void> => {
-    if (!workspace) return
-    const resolved = branch || null
-    setDefaultBranch(resolved)
-    setShowBranchSelector(false)
-    await window.api.invoke('workspace:setDefaultBranch', { workspaceId: workspace.id, branch }).catch(() => {})
-    // Reload settings so the modal stays in sync
     loadWsSettings(workspace.id).catch(() => {})
-  }
+  }, [workspace?.id])
 
   // Subscribe to git-metadata changes so branch renames and external worktree
   // mutations are reflected immediately without a manual refresh.
@@ -1280,7 +1132,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
     if (!workspace) return
     const name = generateRandomName()
     try {
-      await createWorktree(workspace.id, workspace.path, name, name, defaultBranch ?? undefined)
+      await createWorktree(workspace.id, workspace.path, name, name)
     } catch {
       // ignore
     }
@@ -1290,7 +1142,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
     if (!workspace) return
     setShowNewWorktree(false)
     try {
-      await createWorktree(workspace.id, workspace.path, branch, branch, defaultBranch ?? undefined)
+      await createWorktree(workspace.id, workspace.path, branch, branch)
     } catch {
       // ignore
     }
@@ -1317,7 +1169,7 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
         branch = result.branchName
       }
       const name = `${taskData.identifier}: ${taskData.title}`.slice(0, 60)
-      const wt = await createWorktree(workspace.id, workspace.path, branch, name, defaultBranch ?? undefined)
+      const wt = await createWorktree(workspace.id, workspace.path, branch, name)
       await linkWorktree(wt.path, taskData.id, taskData.identifier)
     } catch {
       // If branch exists, the user can create it manually
@@ -1345,199 +1197,52 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Back button + workspace name header */}
+      {/* Worktrees section header */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          padding: '8px 10px 6px',
+          gap: 2,
+          padding: '8px 8px 6px 14px',
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
         }}
       >
-        <button
-          onClick={onBack}
-          onMouseEnter={() => setBackHovered(true)}
-          onMouseLeave={() => setBackHovered(false)}
-          title="Back to workspaces"
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: backHovered ? 'var(--text2)' : 'var(--text3)',
-            fontSize: 'var(--fs-icon)',
-            lineHeight: 1,
-            padding: '2px 4px',
-            borderRadius: 4,
-            transition: 'color .12s',
-            flexShrink: 0,
-          }}
-        >
-          ←
-        </button>
         <span
           style={{
-            fontSize: 'var(--fs-icon)',
+            fontSize: 'var(--fs-xs)',
             fontWeight: 600,
-            color: 'var(--text)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            letterSpacing: '0.12em',
+            color: 'var(--text3)',
+            textTransform: 'uppercase',
             flex: 1,
           }}
         >
-          {workspace.name}
+          Worktrees
         </span>
         <button
-          onClick={() => setShowSettingsModal(true)}
-          title="Workspace settings"
+          onClick={handleCreateWorktreeQuick}
+          title="Quick-create worktree"
           style={{
             background: 'none',
             border: 'none',
             cursor: 'pointer',
             color: 'var(--text3)',
-            fontSize: 13,
+            fontSize: 18,
             lineHeight: 1,
-            padding: '2px 4px',
-            borderRadius: 4,
+            padding: '0 2px',
             transition: 'color .12s',
             flexShrink: 0,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text2)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
         >
-          ⚙
+          +
         </button>
       </div>
 
-      {showSettingsModal && (
-        <WorkspaceSettingsModal
-          workspaceId={workspace.id}
-          workspacePath={workspace.path}
-          onClose={() => {
-            setShowSettingsModal(false)
-            // Sync defaultBranch after settings save
-            loadWsSettings(workspace.id)
-              .then((s) => setDefaultBranch(s.git.mainBranch))
-              .catch(() => {})
-          }}
-        />
-      )}
-
-      {/* Worktree list — fixed min height prevents layout jump on load */}
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 120 }}>
-        <div
-          style={{
-            padding: '8px 14px 4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 'var(--fs-xs)',
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              color: 'var(--text3)',
-              textTransform: 'uppercase',
-            }}
-          >
-            Worktrees
-          </span>
-          <button
-            onClick={handleCreateWorktreeQuick}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text3)',
-              fontSize: 18,
-              lineHeight: 1,
-              padding: '0 2px',
-              transition: 'color .12s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent2)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-            title="Quick-create worktree"
-          >
-            +
-          </button>
-        </div>
-
-        {/* Default base branch selector */}
-        <div style={{ position: 'relative', padding: '0 14px 4px' }}>
-          <button
-            onClick={() => setShowBranchSelector((v) => !v)}
-            title="Set default base branch for new worktrees"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 3,
-              padding: 0,
-              color: 'var(--text3)',
-            }}
-          >
-            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--text3)' }}>base:</span>
-            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--accent2)', fontFamily: 'var(--mono)' }}>
-              {defaultBranch || 'auto'}
-            </span>
-            <span style={{ fontSize: 9, color: 'var(--text3)', lineHeight: 1 }}>▾</span>
-          </button>
-          {showBranchSelector && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 14,
-                zIndex: 100,
-                background: 'var(--surface2)',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                minWidth: 140,
-                maxHeight: 200,
-                overflowY: 'auto',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              }}
-            >
-              <div
-                onClick={() => handleSetDefaultBranch('')}
-                style={{
-                  padding: '5px 10px',
-                  fontSize: 'var(--fs-sm)',
-                  color: !defaultBranch ? 'var(--accent2)' : 'var(--text2)',
-                  cursor: 'pointer',
-                  fontStyle: 'italic',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface3)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-              >
-                auto (origin/HEAD)
-              </div>
-              {remoteBranches.map((b) => (
-                <div
-                  key={b}
-                  onClick={() => handleSetDefaultBranch(b)}
-                  style={{
-                    padding: '5px 10px',
-                    fontSize: 'var(--fs-sm)',
-                    fontFamily: 'var(--mono)',
-                    color: defaultBranch === b ? 'var(--accent2)' : 'var(--text)',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface3)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  {b}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Worktree list */}
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
 
         {sorted.map((wt) => {
           const isActive = wt.isMain
@@ -1619,18 +1324,66 @@ function ActiveWorkspaceView({ onBack }: { onBack: () => void }): JSX.Element {
 // ── Explorer view ─────────────────────────────────────────────────────────────
 
 function ExplorerView({ onAddWorkspace }: { onAddWorkspace: () => void }): JSX.Element {
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
+  const removeWorkspace = useWorkspaceStore((s) => s.removeWorkspace)
+  const loadWorktrees = useWorkspaceStore((s) => s.loadWorktrees)
 
-  const handleBack = (): void => {
-    setActiveWorkspace(null)
+  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null)
+  const settingsWorkspace = workspaces.find((ws) => ws.id === settingsWorkspaceId) ?? null
+
+  const handleSelect = (ws: Workspace): void => {
+    setActiveWorkspace(ws.id)
+    loadWorktrees(ws.id, ws.path).catch(() => {})
   }
 
-  if (activeWorkspaceId) {
-    return <ActiveWorkspaceView onBack={handleBack} />
-  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Workspaces */}
+      <div style={{ flexShrink: 0, overflowY: 'auto', borderBottom: '1px solid var(--border)' }}>
+        <SectionHeader label="Workspaces" onAdd={onAddWorkspace} addTitle="Add workspace" />
+        {workspaces.length === 0 ? (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)', padding: '4px 14px 10px', lineHeight: 1.6 }}>
+            Add a workspace to get started
+          </p>
+        ) : (
+          workspaces.map((ws, i) => (
+            <WorkspaceRow
+              key={ws.id}
+              workspace={ws}
+              index={i}
+              isActive={ws.id === activeWorkspaceId}
+              onSelect={() => handleSelect(ws)}
+              onSettings={() => setSettingsWorkspaceId(ws.id)}
+              onRemove={() => removeWorkspace(ws.id)}
+            />
+          ))
+        )}
+      </div>
 
-  return <WorkspaceSelector onAddWorkspace={onAddWorkspace} />
+      {/* Worktrees */}
+      <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+        {activeWorkspaceId ? (
+          <ActiveWorkspaceView />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '0 16px' }}>
+            <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text3)', textAlign: 'center' }}>
+              Select a workspace to see worktrees
+            </span>
+          </div>
+        )}
+      </div>
+
+      {settingsWorkspace && (
+        <WorkspaceSettingsModal
+          workspaceId={settingsWorkspace.id}
+          workspacePath={settingsWorkspace.path}
+          onClose={() => setSettingsWorkspaceId(null)}
+        />
+      )}
+    </div>
+  )
 }
 
 // ── Theme swatch ──────────────────────────────────────────────────────────────
