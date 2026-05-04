@@ -1,13 +1,7 @@
 import type { IpcMain, BrowserWindow } from 'electron'
 import { persistenceService } from '../services/PersistenceService'
-
-interface AppSettings {
-  theme: string
-  fontSize: number
-  zoomLevel: number
-}
-
-const DEFAULT_SETTINGS: AppSettings = { theme: 'midnight', fontSize: 13, zoomLevel: 0 }
+import { DEFAULT_SETTINGS } from '@shared/types/settings'
+import type { AppSettings } from '@shared/types/settings'
 
 export function register(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   ipcMain.handle('settings:load', () => {

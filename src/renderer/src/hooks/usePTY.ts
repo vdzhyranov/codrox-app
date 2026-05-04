@@ -13,9 +13,10 @@ interface UsePTYOptions {
   cwd: string
   type: 'claude' | 'terminal'
   containerRef: React.RefObject<HTMLDivElement | null>
+  shell?: string
 }
 
-export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef }: UsePTYOptions): void {
+export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef, shell }: UsePTYOptions): void {
   // Capture workspaceId at mount time — changing workspace must not recreate the PTY
   const workspaceIdRef = useRef(workspaceId)
 
@@ -133,7 +134,8 @@ export function usePTY({ ptyId, worktreeId, workspaceId, cwd, type, containerRef
         worktreeId,
         workspaceId: workspaceIdRef.current,
         cwd,
-        type
+        type,
+        shell,
       }) as Promise<void>).then(() => {
         if (cancelled) return
         // Replay scrollback buffer so the terminal shows previous output on reconnect
