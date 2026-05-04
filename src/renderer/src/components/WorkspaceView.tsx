@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { usePTY } from '@renderer/hooks/usePTY'
 import { useActiveWorkspaceId } from '@renderer/hooks/useActiveWorkspaceId'
 import { useFileTreeStore } from '@renderer/store/fileTreeStore'
@@ -31,10 +32,16 @@ interface PaneSplit {
 }
 
 type PaneNode = PaneLeaf | PaneSplit
-type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center'
 
-interface BottomTerminal {
+interface BottomTab {
+  id: string
   sessionName: string
+  shell?: string
+}
+
+interface BottomTerminalState {
+  tabs: BottomTab[]
+  activeId: string
   collapsed: boolean
 }
 
@@ -63,37 +70,6 @@ function removePane(root: PaneNode, id: string): PaneNode | null {
   return root
 }
 
-function insertAtPane(
-  root: PaneNode,
-  targetId: string,
-  newLeaf: PaneLeaf,
-  zone: DropZone,
-): PaneNode {
-  if (root.type === 'leaf') {
-    if (root.id !== targetId) return root
-
-    const direction: 'horizontal' | 'vertical' =
-      zone === 'left' || zone === 'right' ? 'horizontal' : 'vertical'
-
-    const first = zone === 'right' || zone === 'bottom' ? root : newLeaf
-    const second = zone === 'right' || zone === 'bottom' ? newLeaf : root
-
-    return {
-      type: 'split',
-      id: makeId(),
-      direction,
-      ratio: 0.5,
-      first,
-      second,
-    }
-  }
-
-  return {
-    ...root,
-    first: insertAtPane(root.first, targetId, newLeaf, zone),
-    second: insertAtPane(root.second, targetId, newLeaf, zone),
-  }
-}
 
 function updateRatio(root: PaneNode, splitId: string, ratio: number): PaneNode {
   if (root.type === 'leaf') return root
@@ -105,10 +81,6 @@ function updateRatio(root: PaneNode, splitId: string, ratio: number): PaneNode {
   }
 }
 
-function findFirstLeafId(node: PaneNode): string {
-  if (node.type === 'leaf') return node.id
-  return findFirstLeafId(node.first)
-}
 
 function countLeaves(node: PaneNode): number {
   if (node.type === 'leaf') return 1
@@ -185,74 +157,6 @@ function SplitResizeHandle({
   )
 }
 
-// ── DropZoneOverlay ──────────────────────────────────────────────────────────
-
-function DropZoneOverlay({
-  onDrop,
-}: {
-  onDrop: (zone: DropZone) => void
-}): JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  const [zone, setZone] = useState<DropZone>('center')
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    const rect = ref.current?.getBoundingClientRect()
-    if (!rect) return
-
-    const x = (e.clientX - rect.left) / rect.width
-    const y = (e.clientY - rect.top) / rect.height
-
-    let z: DropZone = 'center'
-    if (x < 0.22) z = 'left'
-    else if (x > 0.78) z = 'right'
-    else if (y < 0.22) z = 'top'
-    else if (y > 0.78) z = 'bottom'
-    setZone(z)
-  }, [])
-
-  const zoneStyle = (z: DropZone): React.CSSProperties => {
-    const base: React.CSSProperties = {
-      position: 'absolute',
-      background: 'rgba(124, 106, 247, 0.12)',
-      border: '2px solid var(--accent)',
-      borderRadius: 4,
-      transition: 'all .1s',
-      pointerEvents: 'none',
-    }
-    switch (z) {
-      case 'left':
-        return { ...base, left: 0, top: 0, bottom: 0, width: '50%' }
-      case 'right':
-        return { ...base, right: 0, top: 0, bottom: 0, width: '50%' }
-      case 'top':
-        return { ...base, left: 0, top: 0, right: 0, height: '50%' }
-      case 'bottom':
-        return { ...base, left: 0, bottom: 0, right: 0, height: '50%' }
-      case 'center':
-        return { ...base, left: '10%', top: '10%', right: '10%', bottom: '10%' }
-    }
-  }
-
-  return (
-    <div
-      ref={ref}
-      onDragOver={handleDragOver}
-      onDrop={(e) => {
-        e.preventDefault()
-        onDrop(zone)
-      }}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 15,
-      }}
-    >
-      <div style={zoneStyle(zone)} />
-    </div>
-  )
-}
 
 // ── PaneRenderer (recursive) ──────────────────────────────────────────────────
 
@@ -260,11 +164,7 @@ interface PaneRendererProps {
   node: PaneNode
   worktreePath: string
   focusedId: string | null
-  draggingId: string | null
   onFocus: (id: string) => void
-  onDragStart: (id: string) => void
-  onDragEnd: () => void
-  onDrop: (targetId: string, zone: DropZone) => void
   onRatioChange: (splitId: string, ratio: number) => void
   onClose: (id: string) => void
   canClose: boolean
@@ -281,17 +181,9 @@ function LeafPane({
   node,
   worktreePath,
   focusedId,
-  draggingId,
   onFocus,
-  onDragStart,
-  onDragEnd,
-  onDrop,
-  onClose,
-  canClose,
 }: Omit<PaneRendererProps, 'node'> & { node: PaneLeaf }): JSX.Element {
   const isFocused = focusedId === node.id
-  const isDragging = draggingId === node.id
-  const showDropZone = draggingId !== null && draggingId !== node.id
 
   return (
     <div
@@ -301,7 +193,6 @@ function LeafPane({
         flexDirection: 'column',
         overflow: 'hidden',
         position: 'relative',
-        opacity: isDragging ? 0.4 : 1,
         minWidth: 0,
         minHeight: 0,
         background: 'var(--bg)',
@@ -321,82 +212,12 @@ function LeafPane({
         />
       )}
 
-      <div
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', node.id)
-          onDragStart(node.id)
-        }}
-        onDragEnd={onDragEnd}
-        style={{
-          height: 28,
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 8px',
-          background: isFocused ? 'var(--surface2)' : 'var(--surface)',
-          borderBottom: isFocused
-            ? '2px solid var(--accent)'
-            : '1px solid var(--border)',
-          cursor: 'grab',
-          userSelect: 'none',
-          overflow: 'hidden',
-          zIndex: 6,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontFamily: 'var(--mono)',
-            fontWeight: 600,
-            color: node.panelType === 'claude' ? 'var(--accent2)' : 'var(--green)',
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {node.title}
-        </span>
-        {canClose && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose(node.id)
-            }}
-            title="Close panel"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text3)',
-              cursor: 'pointer',
-              fontSize: 14,
-              padding: '0 2px',
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-          >
-            ×
-          </button>
-        )}
-      </div>
-
       <PanelTerminal
         sessionName={node.sessionName}
         worktreePath={worktreePath}
         type={node.panelType}
         shell={node.shell}
       />
-
-      {showDropZone && (
-        <DropZoneOverlay onDrop={(z) => onDrop(node.id, z)} />
-      )}
     </div>
   )
 }
@@ -407,11 +228,7 @@ function SplitPane({
   node,
   worktreePath,
   focusedId,
-  draggingId,
   onFocus,
-  onDragStart,
-  onDragEnd,
-  onDrop,
   onRatioChange,
   onClose,
   canClose,
@@ -458,11 +275,7 @@ function SplitPane({
   const childProps = {
     worktreePath,
     focusedId,
-    draggingId,
     onFocus,
-    onDragStart,
-    onDragEnd,
-    onDrop,
     onRatioChange,
     onClose,
     canClose,
@@ -542,23 +355,26 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
   // ── Focus tracking ──
   const [focusedPaneId, setFocusedPaneId] = useState<string | null>('claude-main')
 
-  // ── Drag state ──
-  const [draggingPaneId, setDraggingPaneId] = useState<string | null>(null)
-
-  // ── Bottom terminal ──
-  const [bottomTerminal, setBottomTerminal] = useState<BottomTerminal>(() => ({
-    sessionName: `codrox-${worktreeBase}-terminal-main`,
-    collapsed: false,
-  }))
+  // ── Bottom terminal tabs ──
+  const [bottomState, setBottomState] = useState<BottomTerminalState>(() => {
+    const id = 'terminal-main'
+    return {
+      tabs: [{ id, sessionName: `codrox-${worktreeBase}-${id}` }],
+      activeId: id,
+      collapsed: false,
+    }
+  })
 
   // ── Top/bottom split ──
   const [topBottomSplit, setTopBottomSplit] = useState(75)
   const outerRef = useRef<HTMLDivElement>(null)
 
-  // ── Shell picker state ──
+  // ── Shell picker state (for bottom terminal block) ──
   const defaultShell = useSettingsStore((s) => s.defaultShell)
   const [availableShells, setAvailableShells] = useState<ShellInfo[]>([])
   const [shellDropdownOpen, setShellDropdownOpen] = useState(false)
+  const [dropdownPos, setDropdownPos] = useState({ bottom: 0, right: 0 })
+  const addTerminalButtonRef = useRef<HTMLButtonElement>(null)
   const shellDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -571,47 +387,49 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
   useEffect(() => {
     if (!shellDropdownOpen) return
     const handler = (e: MouseEvent): void => {
-      if (shellDropdownRef.current && !shellDropdownRef.current.contains(e.target as Node)) {
-        setShellDropdownOpen(false)
-      }
+      const target = e.target as Node
+      const inButton = addTerminalButtonRef.current?.contains(target)
+      const inDropdown = shellDropdownRef.current?.contains(target)
+      if (!inButton && !inDropdown) setShellDropdownOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [shellDropdownOpen])
 
-  // ── Add panel (splits alongside the focused pane) ──
-  const addPanel = useCallback(
-    (type: 'claude' | 'terminal', shell?: string) => {
-      const id = `${type}-${Date.now()}`
-      const titles = { claude: 'Claude', terminal: 'Terminal' }
-      const newLeaf: PaneLeaf = {
-        type: 'leaf',
+  // ── Add bottom terminal tab ──
+  const addBottomTerminal = useCallback(
+    (shell?: string) => {
+      const id = `terminal-${Date.now()}`
+      const newTab: BottomTab = {
         id,
-        panelType: type,
-        title: titles[type],
-        sessionName: makeSessionName(id),
-        shell: type === 'terminal' ? (shell ?? defaultShell) : undefined,
+        sessionName: `codrox-${worktreeBase}-${id}`,
+        shell: shell ?? defaultShell ?? undefined,
       }
-
-      setPaneTree((prev) => {
-        const targetId = focusedPaneId && findLeafById(prev, focusedPaneId)
-          ? focusedPaneId
-          : findFirstLeafId(prev)
-        return insertAtPane(prev, targetId, newLeaf, 'right')
-      })
-      setFocusedPaneId(id)
+      setBottomState((prev) => ({ ...prev, tabs: [...prev.tabs, newTab], activeId: id }))
     },
-    [makeSessionName, focusedPaneId, defaultShell],
+    [worktreeBase, defaultShell],
   )
 
-  // ── Close panel ──
+  // ── Close bottom terminal tab ──
+  const closeBottomTerminal = useCallback((id: string) => {
+    setBottomState((prev) => {
+      if (prev.tabs.length <= 1) return prev
+      const tab = prev.tabs.find((t) => t.id === id)
+      if (tab) window.api.invoke('pty:destroy', { id: tab.sessionName })
+      const newTabs = prev.tabs.filter((t) => t.id !== id)
+      const newActiveId =
+        prev.activeId === id ? (newTabs[newTabs.length - 1]?.id ?? newTabs[0]?.id ?? '') : prev.activeId
+      return { ...prev, tabs: newTabs, activeId: newActiveId }
+    })
+  }, [])
+
+  // ── Close pane ──
   const closePanel = useCallback(
     (id: string) => {
       setPaneTree((prev) => {
-        if (countLeaves(prev) <= 1) return prev // keep at least one
+        if (countLeaves(prev) <= 1) return prev
         const leaf = findLeafById(prev, id)
         if (leaf) {
-          // Explicitly destroy the PTY since usePTY no longer destroys on unmount
           window.api.invoke('pty:destroy', { id: leaf.sessionName })
         }
         const result = removePane(prev, id)
@@ -620,32 +438,6 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
       if (focusedPaneId === id) setFocusedPaneId(null)
     },
     [focusedPaneId],
-  )
-
-  // ── Drop handler (VS Code style) ──
-  const handleDrop = useCallback(
-    (targetId: string, zone: DropZone) => {
-      if (!draggingPaneId || draggingPaneId === targetId) return
-
-      setPaneTree((prev) => {
-        const draggedLeaf = findLeafById(prev, draggingPaneId)
-        if (!draggedLeaf) return prev
-
-        // Remove the dragged pane
-        let tree = removePane(prev, draggingPaneId)
-        if (!tree) return prev
-
-        // Center → insert right
-        const effectiveZone = zone === 'center' ? 'right' : zone
-
-        // Insert at target position with the chosen zone
-        tree = insertAtPane(tree, targetId, { ...draggedLeaf }, effectiveZone)
-        return tree
-      })
-
-      setDraggingPaneId(null)
-    },
-    [draggingPaneId],
   )
 
   // ── Ratio change ──
@@ -690,11 +482,11 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
 
   // ── Toggle bottom terminal collapse ──
   const toggleBottomCollapse = useCallback(() => {
-    setBottomTerminal((prev) => ({ ...prev, collapsed: !prev.collapsed }))
+    setBottomState((prev) => ({ ...prev, collapsed: !prev.collapsed }))
   }, [])
 
   const isBottomFocused = focusedPaneId === 'bottom-terminal'
-  const bottomHeightStyle = bottomTerminal.collapsed ? 28 : `${100 - topBottomSplit}%`
+  const bottomHeightStyle = bottomState.collapsed ? 28 : `${100 - topBottomSplit}%`
   const leafCount = countLeaves(paneTree)
 
   // ── File tabs from store ──
@@ -842,102 +634,13 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
         })}
 
         <div style={{ flex: 1 }} />
-
-        {/* + buttons only on work tab */}
-        {isWorkTab && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px' }}>
-              {/* Terminal button with shell picker */}
-              <div ref={shellDropdownRef} style={{ position: 'relative', display: 'flex' }}>
-                <div style={{ display: 'flex', alignItems: 'center', borderRadius: 3, overflow: 'visible' }}>
-                  <HeaderButton type="terminal" onClick={() => addPanel('terminal')} style={{ borderRadius: '3px 0 0 3px' }}>
-                    + Terminal
-                  </HeaderButton>
-                  {availableShells.length > 1 && (
-                    <button
-                      title="Select shell"
-                      onClick={() => setShellDropdownOpen((v) => !v)}
-                      style={{
-                        height: 20,
-                        padding: '0 4px',
-                        borderRadius: '0 3px 3px 0',
-                        fontSize: 9,
-                        fontFamily: 'var(--mono)',
-                        cursor: 'pointer',
-                        background: 'var(--surface2)',
-                        color: 'var(--text3)',
-                        border: '1px solid var(--border)',
-                        borderLeft: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        transition: 'color .1s',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
-                    >
-                      ▾
-                    </button>
-                  )}
-                </div>
-                {shellDropdownOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: 4,
-                      background: 'var(--surface2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      zIndex: 1000,
-                      minWidth: 180,
-                      boxShadow: '0 4px 16px rgba(0,0,0,.4)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {availableShells.map((s) => (
-                      <button
-                        key={s.path}
-                        onClick={() => { addPanel('terminal', s.path); setShellDropdownOpen(false) }}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'flex-start',
-                          width: '100%',
-                          padding: '6px 10px',
-                          background: s.path === (defaultShell ?? availableShells[0]?.path) ? 'var(--surface3)' : 'transparent',
-                          color: 'var(--text)',
-                          border: 'none',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          gap: 1,
-                          transition: 'background .1s',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-dim)' }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = s.path === (defaultShell ?? availableShells[0]?.path) ? 'var(--surface3)' : 'transparent'
-                        }}
-                      >
-                        <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600 }}>{s.name}</span>
-                        <span style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{s.path}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <HeaderButton type="claude" onClick={() => addPanel('claude')}>
-                + Claude
-              </HeaderButton>
-            </div>
-          </>
-        )}
       </div>
 
       {/* ── Top section — pane tree OR file preview ── */}
       <div
         style={{
-          flex: bottomTerminal.collapsed ? 1 : undefined,
-          height: bottomTerminal.collapsed ? undefined : `${topBottomSplit}%`,
+          flex: bottomState.collapsed ? 1 : undefined,
+          height: bottomState.collapsed ? undefined : `${topBottomSplit}%`,
           display: 'flex',
           overflow: 'hidden',
           minHeight: 0,
@@ -949,11 +652,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
             node={paneTree}
             worktreePath={worktreePath}
             focusedId={focusedPaneId}
-            draggingId={draggingPaneId}
             onFocus={setFocusedPaneId}
-            onDragStart={setDraggingPaneId}
-            onDragEnd={() => setDraggingPaneId(null)}
-            onDrop={handleDrop}
             onRatioChange={handleRatioChange}
             onClose={closePanel}
             canClose={leafCount > 1}
@@ -989,7 +688,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
       </div>
 
       {/* ── Vertical resize handle ── */}
-      {!bottomTerminal.collapsed && (
+      {!bottomState.collapsed && (
         <SplitResizeHandle
           direction="vertical"
           onResizeStart={handleVerticalResizeStart}
@@ -1006,9 +705,7 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           flexDirection: 'column',
           overflow: 'hidden',
           position: 'relative',
-          borderTop: bottomTerminal.collapsed
-            ? '1px solid var(--border)'
-            : undefined,
+          borderTop: bottomState.collapsed ? '1px solid var(--border)' : undefined,
         }}
       >
         {/* Focus ring for bottom terminal */}
@@ -1025,23 +722,21 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
           />
         )}
 
-        {/* Bottom terminal header */}
+        {/* Bottom terminal header — tabs + add button + collapse */}
         <div
           style={{
             height: 28,
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 8px',
             background: isBottomFocused ? 'var(--surface2)' : 'var(--surface)',
-            borderBottom: isBottomFocused
-              ? '2px solid var(--accent)'
-              : '1px solid var(--border)',
+            borderBottom: isBottomFocused ? '2px solid var(--accent)' : '1px solid var(--border)',
             borderTop: '1px solid var(--border)',
             userSelect: 'none',
+            overflow: 'hidden',
           }}
         >
+          {/* Terminal label */}
           <span
             style={{
               fontSize: 10,
@@ -1050,104 +745,193 @@ export function WorkspaceView({ worktreePath }: WorkspaceViewProps): JSX.Element
               color: 'var(--green)',
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
+              padding: '0 8px',
+              flexShrink: 0,
             }}
           >
-            Terminal {bottomTerminal.collapsed ? '▸' : '▾'}
+            Terminal
           </span>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', alignItems: 'stretch', flex: 1, overflow: 'hidden', height: '100%' }}>
+            {bottomState.tabs.map((tab, i) => {
+              const isActive = tab.id === bottomState.activeId
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setBottomState((prev) => ({ ...prev, activeId: tab.id }))}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '0 8px',
+                    cursor: 'pointer',
+                    borderBottom: isActive ? '2px solid var(--green)' : '2px solid transparent',
+                    background: isActive ? 'var(--surface3)' : 'transparent',
+                    borderRight: '1px solid var(--border)',
+                    transition: 'background .1s',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontFamily: 'var(--mono)',
+                      color: isActive ? 'var(--green)' : 'var(--text3)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {tab.shell ? tab.shell.split('/').pop() : `bash`} {i + 1}
+                  </span>
+                  {bottomState.tabs.length > 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); closeBottomTerminal(tab.id) }}
+                      title="Close terminal"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text3)',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        padding: 0,
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Add terminal button with shell picker */}
+          <div style={{ display: 'flex', flexShrink: 0 }}>
+            <button
+              ref={addTerminalButtonRef}
+              onClick={() => {
+                if (availableShells.length > 1) {
+                  const rect = addTerminalButtonRef.current?.getBoundingClientRect()
+                  if (rect) setDropdownPos({ bottom: window.innerHeight - rect.top, right: window.innerWidth - rect.right })
+                  setShellDropdownOpen((v) => !v)
+                } else {
+                  addBottomTerminal()
+                }
+              }}
+              title="New terminal"
+              style={{
+                height: 20,
+                padding: '0 8px',
+                margin: '0 4px',
+                borderRadius: 3,
+                fontSize: 10,
+                fontFamily: 'var(--mono)',
+                cursor: 'pointer',
+                background: 'var(--green-dim)',
+                color: 'var(--green)',
+                border: '1px solid var(--green)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                transition: 'background .1s, color .1s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--green)'; e.currentTarget.style.color = '#000' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--green-dim)'; e.currentTarget.style.color = 'var(--green)' }}
+            >
+              + {availableShells.length > 1 ? '▾' : ''}
+            </button>
+          </div>
+          {shellDropdownOpen && createPortal(
+            <div
+              ref={shellDropdownRef}
+              style={{
+                position: 'fixed',
+                bottom: dropdownPos.bottom + 4,
+                right: dropdownPos.right,
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                zIndex: 9999,
+                minWidth: 180,
+                boxShadow: '0 4px 16px rgba(0,0,0,.4)',
+                overflow: 'hidden',
+              }}
+            >
+              {availableShells.map((s) => (
+                <button
+                  key={s.path}
+                  onClick={() => { addBottomTerminal(s.path); setShellDropdownOpen(false) }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    width: '100%',
+                    padding: '6px 10px',
+                    background: s.path === (defaultShell ?? availableShells[0]?.path) ? 'var(--surface3)' : 'transparent',
+                    color: 'var(--text)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    gap: 1,
+                    transition: 'background .1s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-dim)' }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = s.path === (defaultShell ?? availableShells[0]?.path) ? 'var(--surface3)' : 'transparent'
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600 }}>{s.name}</span>
+                  <span style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{s.path}</span>
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
+
+          {/* Collapse button */}
           <button
             onClick={toggleBottomCollapse}
-            title={
-              bottomTerminal.collapsed ? 'Expand terminal' : 'Collapse terminal'
-            }
+            title={bottomState.collapsed ? 'Expand terminal' : 'Collapse terminal'}
             style={{
               background: 'none',
               border: 'none',
               color: 'var(--text3)',
               cursor: 'pointer',
               fontSize: 10,
-              padding: '0 2px',
+              padding: '0 8px',
               lineHeight: 1,
               display: 'flex',
               alignItems: 'center',
+              flexShrink: 0,
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--text)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--text3)'
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text3)' }}
           >
-            {bottomTerminal.collapsed ? '▸' : '▾'}
+            {bottomState.collapsed ? '▸' : '▾'}
           </button>
         </div>
 
-        {/* Bottom terminal content — hidden (not unmounted) when collapsed */}
-        <div style={{ flex: 1, display: bottomTerminal.collapsed ? 'none' : 'flex', overflow: 'hidden', minHeight: 0 }}>
-          <PanelTerminal
-            sessionName={bottomTerminal.sessionName}
-            worktreePath={worktreePath}
-            type="terminal"
-          />
+        {/* Bottom terminal content — only active tab rendered; PTY stays alive in main process */}
+        <div style={{ flex: 1, display: bottomState.collapsed ? 'none' : 'flex', overflow: 'hidden', minHeight: 0 }}>
+          {bottomState.tabs.map((tab) =>
+            tab.id === bottomState.activeId ? (
+              <PanelTerminal
+                key={tab.id}
+                sessionName={tab.sessionName}
+                worktreePath={worktreePath}
+                type="terminal"
+                shell={tab.shell}
+              />
+            ) : null
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-// ── HeaderButton ──────────────────────────────────────────────────────────────
-
-interface HeaderButtonProps {
-  type: 'claude' | 'terminal'
-  onClick: () => void
-  children: React.ReactNode
-  style?: React.CSSProperties
-}
-
-function HeaderButton({
-  type,
-  onClick,
-  children,
-  style: styleProp,
-}: HeaderButtonProps): JSX.Element {
-  const isAccent = type === 'claude'
-
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        height: 20,
-        padding: '0 8px',
-        borderRadius: 3,
-        fontSize: 10,
-        fontFamily: 'var(--mono)',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        flexShrink: 0,
-        transition: 'background .1s, border-color .1s, color .1s',
-        lineHeight: 1,
-        whiteSpace: 'nowrap',
-        background: isAccent ? 'var(--accent-dim)' : 'var(--green-dim)',
-        color: isAccent ? 'var(--accent2)' : 'var(--green)',
-        border: isAccent ? '1px solid var(--accent)' : '1px solid var(--green)',
-        ...styleProp,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = isAccent
-          ? 'var(--accent)'
-          : 'var(--green)'
-        e.currentTarget.style.color = isAccent ? '#fff' : '#000'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = isAccent
-          ? 'var(--accent-dim)'
-          : 'var(--green-dim)'
-        e.currentTarget.style.color = isAccent
-          ? 'var(--accent2)'
-          : 'var(--green)'
-      }}
-    >
-      {children}
-    </button>
-  )
-}
